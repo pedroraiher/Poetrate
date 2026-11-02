@@ -42,7 +42,7 @@ class PrivateMediaStoreTest {
         pending.delete()
         val id = capture()
         val file = checkNotNull(store.file(id))
-        assertEquals(context.filesDir.resolve("media").canonicalFile, file.parentFile.canonicalFile)
+        assertEquals(context.filesDir.resolve("media").canonicalFile, checkNotNull(file.parentFile).canonicalFile)
         store.close()
         store = PrivateMediaStore(context)
         val item = store.list().single { it.id == id }
@@ -86,6 +86,44 @@ class PrivateMediaStoreTest {
         assertTrue(store.file(id)!!.exists())
     }
 
+    @Test fun emptyAlbumAndIndependentCoverPersist() {
+        val sourceId = capture()
+        val source = store.list().single { it.id == sourceId }
+        val name = "Empty album ${System.nanoTime()}"
+        val albumId = store.createAlbum(name, source.uri)
+        assertTrue(runCatching { store.createAlbum(name) }.isFailure)
+        val before = store.albums().single { it.id == albumId }
+        assertEquals(0, before.mediaCount)
+        assertNotNull(before.coverUri)
+        assertNotEquals(source.uri, before.coverUri)
+        store.delete(sourceId)
+        created.remove(sourceId)
+        store.close()
+        store = PrivateMediaStore(context)
+        val after = store.albums().single { it.id == albumId }
+        assertEquals(before, after)
+        context.contentResolver.openInputStream(checkNotNull(after.coverUri)).use { assertTrue(checkNotNull(it).read() >= 0) }
+    }
+
+    @Test fun pngImportPreservesFormatAndSourceBytes() {
+        val original = context.filesDir.resolve("media/import-test-${System.nanoTime()}.png")
+        original.parentFile!!.mkdirs()
+        val bitmap = Bitmap.createBitmap(7, 5, Bitmap.Config.ARGB_8888)
+        original.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+        try {
+            val bytes = original.readBytes()
+            val id = store.importUri(store.uri(original)).also { created.add(it) }
+            val item = store.list().single { it.id == id }
+            assertEquals("image/png", item.mimeType)
+            assertEquals("png", store.file(id)!!.extension)
+            assertArrayEquals(bytes, original.readBytes())
+            assertArrayEquals(bytes, store.file(id)!!.readBytes())
+            assertEquals(7, item.width)
+            assertEquals(5, item.height)
+        } finally { original.delete() }
+    }
+
     @Test fun manifestDoesNotRequestPublicMediaOrNetworkAccess() {
         val permissions = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
             .requestedPermissions.orEmpty().toSet()
@@ -94,5 +132,7 @@ class PrivateMediaStoreTest {
         assertFalse("android.permission.READ_EXTERNAL_STORAGE" in permissions)
         assertFalse("android.permission.WRITE_EXTERNAL_STORAGE" in permissions)
         assertFalse("android.permission.INTERNET" in permissions)
+        assertFalse("android.permission.CAMERA" in permissions)
+        assertFalse("android.permission.RECORD_AUDIO" in permissions)
     }
 }

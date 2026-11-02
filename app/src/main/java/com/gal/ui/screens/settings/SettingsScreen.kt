@@ -225,7 +225,7 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             SectionHeader("Biblioteca privada")
             Text(
-                "Somente capturas feitas neste app. Desinstalar ou limpar os dados apaga suas mídias. Compartilhar ou exportar cria cópias fora do app.",
+                "Capturas e cópias das mídias que você selecionar. Desinstalar ou limpar os dados apaga suas mídias. Compartilhar ou exportar cria cópias fora do app.",
                 modifier = Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -513,7 +513,7 @@ fun SettingsScreen(
             }
             AnimatedVisibility(visible = aboutExpanded) {
                 Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-                    Text("Gallery", style = MaterialTheme.typography.bodyLarge)
+                    Text("Poetrate", style = MaterialTheme.typography.bodyLarge)
                     Text(
                         "Zero network · EXIF stripped on share · No cloud · No tracking",
                         style = MaterialTheme.typography.bodySmall,

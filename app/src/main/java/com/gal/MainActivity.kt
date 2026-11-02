@@ -116,7 +116,7 @@ class MainActivity : FragmentActivity() {
                                     )
                                     Spacer(Modifier.height(24.dp))
                                     Text(
-                                        "Mídia Privada bloqueada",
+                                        "Poetrate bloqueada",
                                         style = MaterialTheme.typography.headlineSmall,
                                         modifier = Modifier.padding(bottom = 32.dp)
                                     )
@@ -164,7 +164,7 @@ class MainActivity : FragmentActivity() {
             })
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Desbloquear Mídia Privada")
+            .setTitle("Desbloquear Poetrate")
             .setSubtitle("Authenticate to view your gallery")
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
             .setConfirmationRequired(false)

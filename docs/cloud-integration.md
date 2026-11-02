@@ -27,9 +27,13 @@ regras e permissões do provedor. Adicionar INTERNET apenas ao implementar rede.
 ## Validação em dispositivo
 
 - Instalar ao lado de uma galeria com fotos existentes: biblioteca inicial vazia, sem permissão de leitura de mídias.
-- Foto, vídeo com áudio e câmera frontal/traseira; negar câmera/microfone deve explicar a ação sem travar.
-- As capturas persistem após fechar/reabrir; não aparecem em Google Fotos/Galeria/MediaStore.
+- Abrir foto/vídeo no app nativo de câmera; cancelar e ausência de câmera devem ser tratados sem travar.
+- As cópias privadas persistem após fechar/reabrir e não são publicadas no MediaStore pelo Poetrate. Verificar separadamente se a câmera nativa cria uma cópia própria.
 - Favoritar, mover/copiar entre álbuns, renomear, editar, extrair quadro, restaurar lixeira e excluir.
 - Interromper uma gravação, sair para outro app, girar o dispositivo e testar falta de espaço; nunca publicar arquivo incompleto.
 - Compartilhar/exportar somente após uma ação explícita; conferir que o original permanece privado.
 - Snapshot de transferência exclui lixeira e não aceita mídia removida/movida após o snapshot.
+
+- Criar álbum vazio com/sem capa e verificar persistência após reabrir.
+- Importar PNG, JPEG e vídeo pelo seletor nativo; conferir originais intactos e thumbnails.
+- Atualizar o APK anterior sem desinstalar: IDs, favoritos e lixeira devem continuar presentes.

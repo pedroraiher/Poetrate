@@ -162,12 +162,12 @@ class MediaRepository @Inject constructor(
     }
 
     suspend fun copyToAlbum(items: List<Media>, albumName: String): Int = withContext(Dispatchers.IO) {
-        val album = sanitizeFilename(albumName) ?: return@withContext 0
+        val album = albumName.trim().takeIf { it.isNotBlank() && it.length <= 100 } ?: return@withContext 0
         items.count { runCatching { store.copy(it, album) }.getOrDefault(false) }
     }
 
     suspend fun moveToAlbum(items: List<Media>, albumName: String): Pair<Int, IntentSenderRequest?> = withContext(Dispatchers.IO) {
-        val album = sanitizeFilename(albumName) ?: return@withContext 0 to null
+        val album = albumName.trim().takeIf { it.isNotBlank() && it.length <= 100 } ?: return@withContext 0 to null
         items.count { store.update(it.id, "album", album) } to null
     }
 

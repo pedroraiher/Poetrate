@@ -7,6 +7,9 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
+import com.gal.model.Album
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import com.gal.model.Media
@@ -30,16 +33,18 @@ class PrivateMediaStore @Inject constructor(@ApplicationContext private val cont
 
     private val root get() = File(context.filesDir, "media").also { check(it.isDirectory || it.mkdirs()) }
     private val pending get() = File(context.filesDir, "capture_pending").also { check(it.isDirectory || it.mkdirs()) }
-    private val helper = object : SQLiteOpenHelper(context, "private_media.db", null, 1) {
+    private val helper = object : SQLiteOpenHelper(context, "private_media.db", null, 2) {
         override fun onCreate(db: SQLiteDatabase) {
-            db.execSQL("CREATE TABLE albums (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
+            db.execSQL("CREATE TABLE albums (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, cover TEXT)")
             db.execSQL("""CREATE TABLE media (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL, mime TEXT NOT NULL, album TEXT NOT NULL,
                 added INTEGER NOT NULL, favourite INTEGER NOT NULL DEFAULT 0,
                 trashed INTEGER NOT NULL DEFAULT 0)""")
         }
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            if (oldVersion < 2) db.execSQL("ALTER TABLE albums ADD COLUMN cover TEXT")
+        }
     }
 
     fun newCapture(video: Boolean): File = File.createTempFile("capture_", if (video) ".mp4" else ".jpg", pending)
@@ -48,7 +53,8 @@ class PrivateMediaStore @Inject constructor(@ApplicationContext private val cont
     fun commit(source: File, mime: String, name: String = source.name, album: String = "Capturas"): Long {
         require(source.parentFile?.canonicalFile == pending.canonicalFile)
         require(source.length() > 0) { "Empty capture" }
-        val destination = File(root, "${UUID.randomUUID()}.${if (mime.startsWith("video/")) "mp4" else "jpg"}")
+        require(mime.startsWith("image/") || mime.startsWith("video/"))
+        val destination = File(root, "${UUID.randomUUID()}.${extension(mime)}")
         check(source.renameTo(destination)) { "Could not save capture" }
         try {
             ensureAlbum(album)
@@ -94,6 +100,77 @@ class PrivateMediaStore @Inject constructor(@ApplicationContext private val cont
                 add(Media(number("id"), uri(file), if (video) MediaType.VIDEO else MediaType.IMAGE,
                     mime, str("name"), albumId(album), album, Date(number("added")), Date(file.lastModified()),
                     width, height, rotation, file.length(), duration, number("favourite") == 1L, number("trashed") == 1L))
+            }
+        }
+    }
+
+    private val covers get() = File(context.filesDir, "album_covers").also { check(it.isDirectory || it.mkdirs()) }
+
+    private fun extension(mime: String): String = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
+        ?: if (mime.startsWith("video/")) "mp4" else "jpg"
+
+    /** Copies only explicitly selected content; never changes or deletes the source. */
+    fun importUri(uri: Uri, album: String = "Importados"): Long {
+        require(uri.scheme == "content") { "Selecione uma mídia pelo seletor do Android." }
+        val resolver = context.contentResolver
+        val mime = resolver.getType(uri)?.lowercase() ?: error("Não foi possível identificar o formato.")
+        require(mime.startsWith("image/") || mime.startsWith("video/")) { "Selecione uma foto ou vídeo." }
+        val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+            if (it.moveToFirst()) it.getString(0) else null
+        } ?: "import_${System.currentTimeMillis()}.${extension(mime)}"
+        val temp = newCapture(mime.startsWith("video/"))
+        return try {
+            checkNotNull(resolver.openInputStream(uri)).use { input -> temp.outputStream().use { input.copyTo(it) } }
+            commit(temp, mime, name, album)
+        } finally { temp.delete() }
+    }
+
+    /** Pending capture paths are restored from SavedStateHandle after the camera returns. */
+    fun pendingFile(name: String): File {
+        require(name == File(name).name && name.startsWith("capture_"))
+        return File(pending, name)
+    }
+
+    fun createAlbum(input: String, cover: Uri? = null): Long {
+        val name = input.trim()
+        require(name.isNotBlank() && name.length <= 100) { "Use um nome de 1 a 100 caracteres." }
+        val exists = helper.readableDatabase.rawQuery("SELECT id FROM albums WHERE name = ? COLLATE NOCASE", arrayOf(name)).use { it.moveToFirst() }
+        require(!exists) { "Já existe um álbum com esse nome." }
+        var coverFile: File? = null
+        try {
+            if (cover != null) {
+                require(cover.scheme == "content")
+                val mime = context.contentResolver.getType(cover).orEmpty()
+                require(mime.startsWith("image/")) { "A capa deve ser uma imagem." }
+                coverFile = File(covers, "${UUID.randomUUID()}.${extension(mime)}")
+                checkNotNull(context.contentResolver.openInputStream(cover)).use { input ->
+                    coverFile.outputStream().use { input.copyTo(it) }
+                }
+                check(coverFile.length() > 0) { "Não foi possível copiar a capa." }
+            }
+            val id = helper.writableDatabase.insertOrThrow("albums", null, ContentValues().apply {
+                put("name", name); put("cover", coverFile?.name)
+            })
+            notifyChanged()
+            return id
+        } catch (error: Exception) {
+            coverFile?.delete()
+            throw error
+        }
+    }
+
+    /** Includes explicitly created albums even when they contain no media. */
+    fun albums(): List<Album> {
+        val items = list().filterNot { it.isTrashed }.groupBy { it.albumId }
+        return helper.readableDatabase.query("albums", arrayOf("id", "name", "cover"), null, null, null, null, "id DESC").use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    val media = items[id].orEmpty()
+                    val cover = cursor.getString(2)?.let { File(covers, it) }?.takeIf { it.isFile }
+                    add(Album(id, cursor.getString(1), cover?.let(::uri) ?: media.firstOrNull()?.uri,
+                        media.size, cover == null && media.firstOrNull()?.type == MediaType.VIDEO))
+                }
             }
         }
     }

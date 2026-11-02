@@ -102,9 +102,10 @@ fun AlbumPickerSheet(
                     items(albums, key = { it.id }) { album ->
                         AlbumRow(
                             leading = {
-                                AsyncImage(
-                                    model = album.coverUri,
-                                    contentDescription = null,
+                                PrivateThumbnail(
+                                    uri = album.coverUri,
+                                    isVideo = album.coverIsVideo,
+                                    description = null,
                                     modifier = Modifier
                                         .size(40.dp)
                                         .clip(RoundedCornerShape(6.dp)),

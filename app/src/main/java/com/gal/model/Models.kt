@@ -27,8 +27,9 @@ data class Media(
 data class Album(
     val id: Long,
     val name: String,
-    val coverUri: Uri,
+    val coverUri: Uri?,
     val mediaCount: Int,
+    val coverIsVideo: Boolean = false,
 )
 
 data class DateGroup(

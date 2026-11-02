@@ -87,6 +87,9 @@ fun TimelineScreen(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        floatingActionButton = {
+            if (!selection.isActive) com.gal.ui.components.LibraryAddFab()
+        },
         topBar = {
             if (selection.isActive) {
                 val selectedItems = media.filter { it.id in selection.selected }
@@ -116,13 +119,8 @@ fun TimelineScreen(
                 )
             } else {
                 TopAppBar(
-                    title = { Text("Mídia privada") },
+                    title = { Text("Poetrate") },
                     actions = {
-                        IconButton(onClick = {
-                            context.startActivity(android.content.Intent(context, com.gal.ui.screens.camera.CameraActivity::class.java))
-                        }) {
-                            Icon(androidx.compose.material.icons.Icons.Outlined.PhotoCamera, contentDescription = "Câmera privada")
-                        }
                         SortMenu(sortOrder, viewModel::setSortOrder, showSortMenu) { showSortMenu = it }
                         FilterMenu(filterType, viewModel::setFilterType, showFilterMenu) { showFilterMenu = it }
                         TooltipBox(

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Mídia Privada</string>
+    <string name="app_name">Poetrate</string>
     <string name="timeline">Timeline</string>
     <string name="albums">Albums</string>
     <string name="search">Search</string>
@@ -22,7 +22,7 @@
     <string name="vault_cancel">Cancel</string>
     <string name="permission_required">Storage permission required</string>
     <string name="grant_permission">Grant Permission</string>
-    <string name="empty_timeline">Sua biblioteca começa aqui.\nUse a câmera acima para tirar fotos e gravar vídeos privados.</string>
+    <string name="empty_timeline">Sua biblioteca começa aqui.\nToque em + para abrir a câmera ou adicionar fotos e vídeos.</string>
     <string name="empty_albums">No albums found</string>
     <string name="empty_trash">Trash is empty</string>
     <string name="empty_vault">Vault is empty</string>

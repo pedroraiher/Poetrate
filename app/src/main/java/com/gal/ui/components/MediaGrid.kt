@@ -1,7 +1,5 @@
 package com.gal.ui.components
 
-import android.graphics.Bitmap
-import android.util.Size as ThumbnailSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,7 +33,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,16 +41,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.gal.model.DateGroup
 import com.gal.model.Media
 import com.gal.model.MediaType
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 fun MediaGrid(
@@ -71,7 +64,7 @@ fun MediaGrid(
     val bottomInset = LocalFloatingNavBarPadding.current
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
-        contentPadding = PaddingValues(bottom = bottomInset),
+        contentPadding = PaddingValues(bottom = bottomInset + 88.dp),
         modifier = modifier,
     ) {
         items(media, key = { it.id }) { item ->
@@ -105,7 +98,7 @@ fun MediaSectionedGrid(
     val bottomInset = LocalFloatingNavBarPadding.current
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
-        contentPadding = PaddingValues(bottom = bottomInset),
+        contentPadding = PaddingValues(bottom = bottomInset + 88.dp),
         modifier = modifier,
     ) {
         sections.forEach { section ->
@@ -145,21 +138,6 @@ fun MediaCell(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val videoThumbnail: Bitmap? by produceState<Bitmap?>(null, media.id) {
-        if (media.type == MediaType.VIDEO) {
-            value = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.loadThumbnail(
-                        media.uri,
-                        ThumbnailSize(512, 512),
-                        null,
-                    )
-                }.getOrNull()
-            }
-        }
-    }
-
     val shape = MaterialTheme.shapes.small
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -183,10 +161,11 @@ fun MediaCell(
                 onLongClick = onLongClick,
             )
     ) {
-        AsyncImage(
-            model = if (media.type == MediaType.VIDEO) videoThumbnail else media.uri,
-            contentDescription = media.displayName,
-            contentScale = ContentScale.Crop,
+        PrivateThumbnail(
+            uri = media.uri,
+            isVideo = media.type == MediaType.VIDEO,
+            description = media.displayName,
+            revision = media.dateModified.time,
             modifier = Modifier.fillMaxSize(),
         )
 

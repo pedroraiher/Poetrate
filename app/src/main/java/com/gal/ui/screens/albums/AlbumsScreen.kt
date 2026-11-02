@@ -59,13 +59,46 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
+import android.net.Uri
+import android.content.Context
+import android.content.Intent
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import com.gal.data.local.PrivateMediaStore
+import com.gal.ui.components.AddMenuFab
+import com.gal.ui.components.AddMenuAction
+import com.gal.ui.components.PrivateThumbnail
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @HiltViewModel
 class AlbumsViewModel @Inject constructor(
     repository: MediaRepository,
+    private val store: PrivateMediaStore,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
     val albums = repository.albums()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<Album>())
+    val creating = MutableStateFlow(false)
+    val error = MutableStateFlow<String?>(null)
+    fun create(name: String, cover: Uri?, onCreated: () -> Unit) {
+        if (creating.value) return
+        viewModelScope.launch {
+            creating.value = true
+            error.value = null
+            try {
+                withContext(Dispatchers.IO) { store.createAlbum(name, cover) }
+                cover?.let { runCatching { context.contentResolver.releasePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } }
+                onCreated()
+            } catch (failure: Exception) {
+                error.value = failure.localizedMessage ?: "Não foi possível criar o álbum."
+            } finally { creating.value = false }
+        }
+    }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,6 +110,14 @@ fun AlbumsScreen(
     viewModel: AlbumsViewModel = hiltViewModel(),
 ) {
     val albums by viewModel.albums.collectAsStateWithLifecycle()
+    val creating by viewModel.creating.collectAsStateWithLifecycle()
+    val createError by viewModel.error.collectAsStateWithLifecycle()
+    var showCreate by rememberSaveable { mutableStateOf(false) }
+    if (showCreate) CreateAlbumDialog(
+        busy = creating, error = createError,
+        onDismiss = { showCreate = false; viewModel.error.value = null },
+        onCreate = { name, cover -> viewModel.create(name, cover) { showCreate = false } },
+    )
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     var columns by remember { mutableIntStateOf(2) }
@@ -85,9 +126,15 @@ fun AlbumsScreen(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        floatingActionButton = {
+            AddMenuFab(listOf(AddMenuAction("Novo álbum", Icons.Outlined.CreateNewFolder) {
+                viewModel.error.value = null
+                showCreate = true
+            }), busy = creating)
+        },
         topBar = {
             TopAppBar(
-                title = { Text("Albums") },
+                title = { Text("Álbuns") },
                 actions = {
                     IconButton(onClick = { columns = if (columns >= 4) 1 else columns + 1 }) {
                         Icon(
@@ -130,7 +177,7 @@ fun AlbumsScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "No albums found",
+                    text = "Nenhum álbum ainda.\nToque em + para criar o primeiro.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -143,7 +190,7 @@ fun AlbumsScreen(
                     start = 12.dp, end = 12.dp,
                     top = padding.calculateTopPadding() + 8.dp,
                     bottom = padding.calculateBottomPadding() + 8.dp +
-                        com.gal.ui.navigation.LocalFloatingNavBarPadding.current,
+                        com.gal.ui.navigation.LocalFloatingNavBarPadding.current + 88.dp,
                 ),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -191,10 +238,10 @@ private fun AlbumCard(
             .clip(shape)
             .clickable(onClick = onClick),
     ) {
-        AsyncImage(
-            model = album.coverUri,
-            contentDescription = album.name,
-            contentScale = ContentScale.Crop,
+        PrivateThumbnail(
+            uri = album.coverUri,
+            isVideo = album.coverIsVideo,
+            description = album.name,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)

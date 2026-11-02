@@ -4,4 +4,6 @@
          expose other items in cache (vault staging, OS scratch, etc.). -->
     <cache-path name="shared_images" path="share/" />
     <files-path name="private_media" path="media/" />
+    <files-path name="capture_output" path="capture_pending/" />
+    <files-path name="album_covers" path="album_covers/" />
 </paths>

@@ -20,9 +20,7 @@ class LocalDataSource @Inject constructor(
     fun favourites() = timeline().map { list -> list.filter { it.isFavourite } }
     fun trash() = all().map { list -> list.filter { it.isTrashed } }
     fun album(albumId: Long) = timeline().map { list -> list.filter { it.albumId == albumId } }
-    fun albums(): Flow<List<Album>> = timeline().map { list ->
-        list.groupBy { it.albumId }.map { (id, items) -> Album(id, items.first().albumName, items.first().uri, items.size) }
-    }
+    fun albums(): Flow<List<Album>> = combine(PrivateMediaStore.changes, refresher.tick) { _, _ -> store.albums() }.flowOn(Dispatchers.IO)
     fun search(query: String) = timeline().map { list ->
         if (query.isBlank()) emptyList() else list.filter {
             it.displayName.orEmpty().contains(query, ignoreCase = true) || it.albumName.contains(query, ignoreCase = true)

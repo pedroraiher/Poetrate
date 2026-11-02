@@ -15,8 +15,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         targetSdk = 37
         // CI release builds pass these; local builds use the defaults.
-        versionCode = providers.gradleProperty("appVersionCode").map(String::toInt).getOrElse(7)
-        versionName = providers.gradleProperty("appVersionName").getOrElse("4.2.0")
+        versionCode = providers.gradleProperty("appVersionCode").map(String::toInt).getOrElse(8)
+        versionName = providers.gradleProperty("appVersionName").getOrElse("0.2.0")
 
         // meow meow meow meow
         ndk {
@@ -70,10 +70,6 @@ kotlin {
 dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
-    implementation("androidx.camera:camera-camera2:1.5.1")
-    implementation("androidx.camera:camera-lifecycle:1.5.1")
-    implementation("androidx.camera:camera-view:1.5.1")
-    implementation("androidx.camera:camera-video:1.5.1")
     implementation(libs.guava)
 
     // Compose BOM

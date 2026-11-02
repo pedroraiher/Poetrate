@@ -24,7 +24,10 @@ class GalApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         ExifScrubber().clearCache(this)
-        java.io.File(filesDir, "capture_pending").listFiles()?.filter { it.isFile }?.forEach { it.delete() }
+        // A native camera may still be writing while our process is recreated.
+        // Keep pending captures until their result arrives; only remove abandoned day-old files.
+        val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+        java.io.File(filesDir, "capture_pending").listFiles()?.filter { it.isFile && it.lastModified() < cutoff }?.forEach { it.delete() }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

@@ -1,37 +1,48 @@
-# Mídia Privada
+# Poetrate
 
-Fork de Gallery para Android 13+: uma biblioteca que começa vazia e contém somente
-fotos e vídeos capturados pela câmera interna, além das cópias editadas dessas mídias.
+Biblioteca privada de fotos e vídeos para Android 13+, baseada em Gallery.
 
-- Fotos e vídeos ficam em `filesDir/media`, dentro do armazenamento privado do app.
-- Câmera integrada com CameraX, câmera frontal/traseira, foto e vídeo com áudio.
-- Não consulta MediaStore, não pede acesso às fotos do telefone e não importa a galeria existente.
-- Favoritos, álbuns, busca, lixeira, edição e extração de quadros trabalham na biblioteca privada.
-- Compartilhar, abrir em outro app, definir papel de parede e exportar uma pasta são ações explícitas que podem tornar uma cópia acessível fora do app.
-- Desinstalar ou limpar os dados apaga a biblioteca. Backup automático e transferência de dados do Android estão desativados.
-- Armazenamento privado não é criptografia adicional: a proteção é o isolamento e a criptografia do próprio Android.
+## Biblioteca
 
-Identificador próprio: `com.pedroraiher.mediarepo` (`.debug` nas compilações de teste),
-para instalar ao lado da galeria original sem ler ou migrar suas mídias.
-O bloqueio de certificados do autor original não é aplicado neste fork; releases
-devem ser assinados com a chave do proprietário deste aplicativo.
+- Começa vazia, sem varrer a galeria do telefone.
+- Botão circular **+** no canto inferior direito: **Abrir câmera** (foto/vídeo pelo app nativo) ou **Adicionar mídia** (seletor de fotos e vídeos do Android).
+- A importação copia apenas as mídias escolhidas. Os originais não são alterados ou apagados.
+- Arquivos copiados e capturas retornadas ficam em `filesDir/media`, sem publicação no MediaStore.
+- A câmera recebe uma URI privada via EXTRA_OUTPUT. Uma câmera de terceiros pode salvar sua própria cópia; isso depende do aplicativo do fabricante.
+- Prévias de vídeo extraem um frame a 10% da duração, com tentativa alternativa no primeiro frame, pelo decodificador de vídeo do Coil.
+- Álbuns: **+ → Novo álbum**, com nome e capa opcional escolhida pelo seletor do Android. Álbuns vazios são persistidos e as capas são copiadas para `filesDir/album_covers`.
+- O **+** dentro de um álbum adiciona capturas/importações diretamente a ele.
+- Os botões usam a mesma cor `tertiaryContainer` do tema, centralizada em `AddMenuFab`, pronta para uma preferência de cor futura.
+- Favoritos, lixeira, edições e organização continuam privados. Compartilhar/exportar são ações explícitas.
 
-## Build
+Desinstalar ou limpar os dados apaga a biblioteca. Backup automático está desativado.
+O app não pede leitura de toda a galeria, câmera, microfone ou acesso à internet:
+as interfaces de captura e seleção são fornecidas por outros componentes Android.
 
-Use o Gradle Wrapper do repositório, JDK compatível com o Android Gradle Plugin e SDK Android 37:
+## Atualização
+
+O nome visível é Poetrate. O identificador `com.pedroraiher.mediarepo` (com `.debug`
+em builds de teste) foi mantido para preservar a instalação anterior. A migração do
+banco v1 → v2 acrescenta a capa dos álbuns sem apagar IDs ou mídias.
+Use a mesma chave de assinatura ao atualizar; não desinstale para trocar o nome.
+
+## Build e testes
+
+SDK Android 37 e JDK compatível com o Android Gradle Plugin:
 
 ```sh
-./gradlew assembleDebug
+./gradlew assembleDebug assembleDebugAndroidTest
 ./gradlew connectedDebugAndroidTest
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`.
+Os testes de dispositivo cobrem persistência, cópia, lixeira, importação PNG,
+álbuns vazios, capas independentes e ausência de permissões amplas.
 
-## Integração futura com nuvem
+## Nuvem (futura)
 
-Veja [docs/cloud-integration.md](docs/cloud-integration.md). Não há login, upload,
-sincronização ou permissão INTERNET nesta versão.
+`AlbumTransferSource` mantém o acesso às mídias separado dos futuros provedores.
+Veja [docs/cloud-integration.md](docs/cloud-integration.md). Ainda não há login ou
+envio para Google Drive/outros provedores implementado.
 
-## Origem
-
-Baseado em Gallery (jegly/Gallery). A licença original é mantida em LICENSE.
+Baseado em Gallery (jegly/Gallery). Licença original mantida em LICENSE.

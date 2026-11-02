@@ -92,6 +92,9 @@ fun AlbumScreen(
     var pickerMode by remember { mutableStateOf<PickerMode?>(null) }
 
     Scaffold(
+        floatingActionButton = {
+            if (!selection.isActive) com.gal.ui.components.LibraryAddFab(album = albumName)
+        },
         topBar = {
             if (selection.isActive) {
                 val selectedItems = media.filter { it.id in selection.selected }
