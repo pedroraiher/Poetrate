@@ -24,6 +24,7 @@ class GalApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         ExifScrubber().clearCache(this)
+        java.io.File(filesDir, "capture_pending").listFiles()?.filter { it.isFile }?.forEach { it.delete() }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

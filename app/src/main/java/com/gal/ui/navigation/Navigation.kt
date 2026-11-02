@@ -1,6 +1,7 @@
 package com.gal.ui.navigation
 
 import android.net.Uri
+
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -32,20 +33,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -62,7 +61,6 @@ import com.gal.ui.screens.search.SearchScreen
 import com.gal.ui.screens.settings.SettingsScreen
 import com.gal.ui.screens.timeline.TimelineScreen
 import com.gal.ui.screens.trash.TrashScreen
-import com.gal.ui.screens.viewer.IntentViewerScreen
 import com.gal.ui.screens.viewer.MediaViewerScreen
 
 private data class TopLevelRoute(
@@ -92,18 +90,11 @@ val LocalFloatingNavBarPadding = compositionLocalOf<Dp> { 0.dp }
 private val FLOATING_NAV_BAR_HEIGHT = 72.dp
 
 @Composable
-fun GalNavHost(intentUri: Uri? = null, onIntentConsumed: () -> Unit = {}) {
+fun GalNavHost() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val showNav = topLevelRoutes.any { it.route == currentRoute }
-
-    LaunchedEffect(intentUri) {
-        if (intentUri != null) {
-            navController.navigate("intent_viewer/${Uri.encode(intentUri.toString())}")
-            onIntentConsumed()
-        }
-    }
 
     // The pill genuinely floats — content fills the full screen and the pill is overlaid
     // at the bottom. Screens read [LocalFloatingNavBarPadding] and add it to their
@@ -162,7 +153,7 @@ fun GalNavHost(intentUri: Uri? = null, onIntentConsumed: () -> Unit = {}) {
             }
             composable("albums") {
                 AlbumsScreen(
-                    onAlbumClick = { navController.navigate("album/${it.id}/${it.name}") },
+                    onAlbumClick = { navController.navigate("album/${it.id}/${Uri.encode(it.name)}") },
                     onTrashClick = { navController.navigate("trash") },
                     onSettingsClick = { navController.navigate("settings") },
                 )
@@ -225,16 +216,6 @@ fun GalNavHost(intentUri: Uri? = null, onIntentConsumed: () -> Unit = {}) {
                 MediaViewerScreen(
                     onBack = { navController.popBackStack() },
                     onEdit = { media -> EditActivity.launch(navController.context, media.uri) },
-                )
-            }
-            composable(
-                "intent_viewer/{uri}",
-                arguments = listOf(navArgument("uri") { type = NavType.StringType }),
-            ) { back ->
-                val encoded = back.arguments?.getString("uri") ?: return@composable
-                IntentViewerScreen(
-                    uri = Uri.parse(encoded),
-                    onBack = { navController.popBackStack() },
                 )
             }
             }   // close NavHost

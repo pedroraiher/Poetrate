@@ -2,13 +2,10 @@ package com.gal.ui.screens.viewer
 
 import android.app.Activity
 import android.app.PictureInPictureParams
-import android.content.ContentValues
 import android.content.Context
-import android.content.res.Configuration
 import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.os.Build
-import android.provider.MediaStore
 import android.util.Rational
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.FrameLayout
@@ -23,11 +20,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.displayCutoutPadding
@@ -74,16 +69,15 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.gal.ui.theme.Motion
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -107,7 +101,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 
 @Composable
 fun LocalVideoPlayer(
@@ -825,21 +818,12 @@ private fun captureFrame(context: Context, uri: android.net.Uri, positionMs: Lon
         val bm = retriever.getFrameAtTime(positionMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST)
             ?: return false
         val name = "frame_${System.currentTimeMillis()}.jpg"
-        val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Gal")
-            put(MediaStore.Images.Media.IS_PENDING, 1)
-        }
-        val out = context.contentResolver.insert(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values,
-        ) ?: return false
-        context.contentResolver.openOutputStream(out)?.use { os ->
-            bm.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, os)
-        }
-        values.clear()
-        values.put(MediaStore.Images.Media.IS_PENDING, 0)
-        context.contentResolver.update(out, values, null, null)
+        val store = com.gal.data.local.PrivateMediaStore(context.applicationContext)
+        val temp = store.newCapture(false)
+        try {
+            temp.outputStream().use { check(bm.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it)) }
+            store.commit(temp, "image/jpeg", name)
+        } finally { temp.delete(); store.close() }
         bm.recycle()
         true
     } catch (e: Exception) {

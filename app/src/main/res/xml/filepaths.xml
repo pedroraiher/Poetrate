@@ -3,4 +3,5 @@
     <!-- Scoped to the share/ subdirectory so a FileProvider URI grant can never
          expose other items in cache (vault staging, OS scratch, etc.). -->
     <cache-path name="shared_images" path="share/" />
+    <files-path name="private_media" path="media/" />
 </paths>

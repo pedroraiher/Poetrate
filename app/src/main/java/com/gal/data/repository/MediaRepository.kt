@@ -1,14 +1,11 @@
 package com.gal.data.repository
 
-import android.app.RecoverableSecurityException
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
-import android.provider.MediaStore
 import androidx.activity.result.IntentSenderRequest
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -35,6 +32,7 @@ import javax.inject.Singleton
 class MediaRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dataSource: LocalDataSource,
+    private val store: com.gal.data.local.PrivateMediaStore,
     private val dataStore: DataStore<Preferences>,
 ) {
     companion object {
@@ -60,67 +58,29 @@ class MediaRepository @Inject constructor(
 
     // ── Batch ops ───────────────────────────────────────────────────────────
 
-    suspend fun setFavourite(items: List<Media>, favourite: Boolean): IntentSenderRequest? =
-        withContext(Dispatchers.IO) {
-            if (items.isEmpty()) return@withContext null
-            try {
-                val pi = MediaStore.createFavoriteRequest(
-                    context.contentResolver, items.map { it.uri }, favourite,
-                )
-                IntentSenderRequest.Builder(pi.intentSender).build()
-            } catch (e: RecoverableSecurityException) {
-                IntentSenderRequest.Builder(e.userAction.actionIntent.intentSender).build()
-            } catch (e: Exception) { null }
-        }
-
+    suspend fun setFavourite(items: List<Media>, favourite: Boolean): IntentSenderRequest? = withContext(Dispatchers.IO) {
+        items.forEach { store.update(it.id, "favourite", if (favourite) "1" else "0") }
+        null
+    }
     suspend fun moveToTrash(items: List<Media>): IntentSenderRequest? = withContext(Dispatchers.IO) {
-        if (items.isEmpty()) return@withContext null
-        try {
-            val pi = MediaStore.createTrashRequest(context.contentResolver, items.map { it.uri }, true)
-            IntentSenderRequest.Builder(pi.intentSender).build()
-        } catch (e: Exception) { null }
+        items.forEach { store.update(it.id, "trashed", "1") }; null
     }
-
     suspend fun restoreFromTrash(items: List<Media>): IntentSenderRequest? = withContext(Dispatchers.IO) {
-        if (items.isEmpty()) return@withContext null
-        try {
-            val pi = MediaStore.createTrashRequest(context.contentResolver, items.map { it.uri }, false)
-            IntentSenderRequest.Builder(pi.intentSender).build()
-        } catch (e: Exception) { null }
+        items.forEach { store.update(it.id, "trashed", "0") }; null
     }
-
     suspend fun delete(items: List<Media>): IntentSenderRequest? = withContext(Dispatchers.IO) {
-        if (items.isEmpty()) return@withContext null
-        if (dataStore.data.first()[KEY_SECURE_DELETE] != false) {
-            items.forEach { secureOverwrite(it.uri) }
+        items.forEach {
+            if (dataStore.data.first()[KEY_SECURE_DELETE] != false) secureOverwrite(it.uri)
+            check(store.delete(it.id)) { "Could not delete private media" }
         }
-        try {
-            val pi = MediaStore.createDeleteRequest(context.contentResolver, items.map { it.uri })
-            IntentSenderRequest.Builder(pi.intentSender).build()
-        } catch (e: Exception) { null }
+        null
     }
+    // Private originals belong to this app: no MediaStore write authorization is needed.
+    suspend fun requestWrite(items: List<Media>): IntentSenderRequest? = null
 
-    // ── Rename / Rotate / Move-Copy / OpenWith ──────────────────────────────
-
-    /** Request write access to one item; on grant, the caller can perform the rename via [applyRename]. */
-    suspend fun requestWrite(items: List<Media>): IntentSenderRequest? = withContext(Dispatchers.IO) {
-        if (items.isEmpty()) return@withContext null
-        try {
-            val pi = MediaStore.createWriteRequest(context.contentResolver, items.map { it.uri })
-            IntentSenderRequest.Builder(pi.intentSender).build()
-        } catch (e: Exception) { null }
-    }
-
-    /** Renames a file via MediaStore. Call after the user grants the write request. */
     suspend fun applyRename(media: Media, newName: String): Boolean = withContext(Dispatchers.IO) {
-        if (newName.isBlank()) return@withContext false
-        val sanitized = sanitizeFilename(newName) ?: return@withContext false
-        runCatching {
-            val cv = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, sanitized)
-            }
-            context.contentResolver.update(media.uri, cv, null, null) > 0
-        }.getOrDefault(false)
+        val name = sanitizeFilename(newName) ?: return@withContext false
+        store.update(media.id, "name", name)
     }
 
     /** Strips path traversal + reserved FAT/MediaStore characters. Returns null if nothing left. */
@@ -147,8 +107,12 @@ class MediaRepository @Inject constructor(
             "image/jpeg", "image/jpg", "image/heic", "image/heif", "image/webp",
         )
         runCatching {
-            if (supportsExif) rotateViaExif(media.uri, turns)
-            else rotateViaReencode(media.uri, turns)
+            val ok = if (supportsExif) rotateViaExif(media.uri, turns) else rotateViaReencode(media.uri, turns)
+            if (ok) {
+                store.file(media.id)?.setLastModified(System.currentTimeMillis())
+                com.gal.data.local.PrivateMediaStore.notifyChanged()
+            }
+            ok
         }.getOrDefault(false)
     }
 
@@ -197,56 +161,14 @@ class MediaRepository @Inject constructor(
         return true
     }
 
-    /** Copies items into Pictures/[albumName]. Returns number successful. */
-    suspend fun copyToAlbum(items: List<Media>, albumName: String): Int =
-        copyOrMove(items, albumName, deleteSource = false)
-
-    /** Moves items into Pictures/[albumName]. Deletion of the source uses createDeleteRequest. */
-    suspend fun moveToAlbum(
-        items: List<Media>, albumName: String,
-    ): Pair<Int, IntentSenderRequest?> = withContext(Dispatchers.IO) {
-        val copied = copyOrMove(items, albumName, deleteSource = false)
-        val delReq = if (copied > 0) delete(items) else null
-        copied to delReq
+    suspend fun copyToAlbum(items: List<Media>, albumName: String): Int = withContext(Dispatchers.IO) {
+        val album = sanitizeFilename(albumName) ?: return@withContext 0
+        items.count { runCatching { store.copy(it, album) }.getOrDefault(false) }
     }
 
-    private suspend fun copyOrMove(
-        items: List<Media>, albumName: String, deleteSource: Boolean,
-    ): Int = withContext(Dispatchers.IO) {
-        if (items.isEmpty() || albumName.isBlank()) return@withContext 0
-        val safeAlbum = sanitizeFilename(albumName)?.take(100) ?: return@withContext 0
-        val resolver = context.contentResolver
-        var count = 0
-        for (m in items) {
-            try {
-                val collection = if (m.type == MediaType.VIDEO)
-                    MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-                else
-                    MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-
-                val values = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, m.displayName ?: "${m.id}")
-                    put(MediaStore.MediaColumns.MIME_TYPE, m.mimeType)
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/$safeAlbum")
-                    put(MediaStore.MediaColumns.IS_PENDING, 1)
-                }
-                val destUri = resolver.insert(collection, values) ?: continue
-                try {
-                    resolver.openInputStream(m.uri)?.use { input ->
-                        resolver.openOutputStream(destUri)?.use { output -> input.copyTo(output) }
-                    }
-                    resolver.update(
-                        destUri,
-                        ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) },
-                        null, null,
-                    )
-                    count++
-                } catch (e: Exception) {
-                    resolver.delete(destUri, null, null)
-                }
-            } catch (_: Exception) {}
-        }
-        count
+    suspend fun moveToAlbum(items: List<Media>, albumName: String): Pair<Int, IntentSenderRequest?> = withContext(Dispatchers.IO) {
+        val album = sanitizeFilename(albumName) ?: return@withContext 0 to null
+        items.count { store.update(it.id, "album", album) } to null
     }
 
     /** Builds an ACTION_VIEW chooser intent for a single media item. */
@@ -377,49 +299,4 @@ class MediaRepository @Inject constructor(
         digest.digest().joinToString("") { "%02x".format(it) }
     }.getOrDefault(uri.toString()) // hash failed — fall back to a value unique to this item so it never falsely joins another group
 
-    /** Copies external URIs into Pictures/Gal via MediaStore. Returns the number successfully imported. */
-    suspend fun importFiles(uris: List<Uri>): Int = withContext(Dispatchers.IO) {
-        val resolver = context.contentResolver
-        var count = 0
-        for (uri in uris) {
-            try {
-                val mimeType = resolver.getType(uri) ?: continue
-                if (!mimeType.startsWith("image/") && !mimeType.startsWith("video/")) continue
-
-                val displayName = resolver.query(
-                    uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
-                    null, null, null,
-                )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-                    ?: "${System.currentTimeMillis()}"
-
-                val collection = if (mimeType.startsWith("video/"))
-                    MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-                else
-                    MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-
-                val values = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
-                    put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Gal")
-                    put(MediaStore.MediaColumns.IS_PENDING, 1)
-                }
-
-                val destUri = resolver.insert(collection, values) ?: continue
-                try {
-                    resolver.openInputStream(uri)?.use { input ->
-                        resolver.openOutputStream(destUri)?.use { output -> input.copyTo(output) }
-                    }
-                    resolver.update(
-                        destUri,
-                        ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) },
-                        null, null,
-                    )
-                    count++
-                } catch (e: Exception) {
-                    resolver.delete(destUri, null, null)
-                }
-            } catch (_: Exception) {}
-        }
-        count
-    }
 }

@@ -3,8 +3,6 @@ package com.gal.ui.screens.settings
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,7 +17,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ExpandLess
@@ -132,7 +129,6 @@ class SettingsViewModel @Inject constructor(
     fun setPtyxisPalette(v: String)      = viewModelScope.launch { dataStore.edit { it[KEY_PTYXIS_PALETTE]         = v } }
     fun setAppFont(v: String)            = viewModelScope.launch { dataStore.edit { it[KEY_APP_FONT]               = v } }
 
-    suspend fun importFiles(uris: List<Uri>): Int = mediaRepository.importFiles(uris)
 
     /** Backs up the whole (non-trashed) library into the SAF folder the user picked. */
     suspend fun exportLibrary(destTreeUri: Uri, onProgress: (Int, Int) -> Unit): Int =
@@ -149,24 +145,7 @@ fun SettingsScreen(
     val state by viewModel.state.collectAsState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    var importing by remember { mutableStateOf(false) }
     val context = LocalContext.current
-
-    val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia()
-    ) { uris ->
-        if (uris.isNotEmpty()) {
-            scope.launch {
-                importing = true
-                val count = viewModel.importFiles(uris)
-                importing = false
-                snackbarHostState.showSnackbar(
-                    if (count > 0) "Imported $count item${if (count == 1) "" else "s"} into Gal"
-                    else "Nothing imported"
-                )
-            }
-        }
-    }
 
     // (copied, total) while a backup is running; null when idle.
     var backupProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -244,34 +223,12 @@ fun SettingsScreen(
                 onCheckedChange = { viewModel.setHapticFeedback(it) },
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            SectionHeader("Library")
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = !importing) {
-                        importLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageAndVideo))
-                    }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Import media", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Copy photos or videos from anywhere into your gallery",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (importing) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        Icons.Outlined.AddPhotoAlternate,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            SectionHeader("Biblioteca privada")
+            Text(
+                "Somente capturas feitas neste app. Desinstalar ou limpar os dados apaga suas mídias. Compartilhar ou exportar cria cópias fora do app.",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -301,9 +258,9 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Backup to folder", style = MaterialTheme.typography.bodyLarge)
+                    Text("Exportar cópia para pasta", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Copy your library to a folder you choose — stays fully offline",
+                        "Cria cópias fora deste app, na pasta que você escolher",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

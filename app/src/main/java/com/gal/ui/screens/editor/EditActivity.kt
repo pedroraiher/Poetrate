@@ -1,6 +1,5 @@
 package com.gal.ui.screens.editor
 
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -14,8 +13,6 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
-import android.provider.MediaStore
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -29,7 +26,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -707,24 +703,17 @@ class EditActivity : ComponentActivity() {
     private fun saveAsCopy() {
         val bm = currentBitmap ?: return
         lifecycleScope.launch(Dispatchers.IO) {
-            val cv = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, "gal_edit_${System.currentTimeMillis()}.jpg")
-                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Gal")
-                put(MediaStore.Images.Media.IS_PENDING, 1)
-            }
-            val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv)
-            uri?.let {
-                contentResolver.openOutputStream(it)?.use { out ->
-                    bm.compress(Bitmap.CompressFormat.JPEG, 95, out)
-                }
-                cv.clear()
-                cv.put(MediaStore.Images.Media.IS_PENDING, 0)
-                contentResolver.update(it, cv, null, null)
-            }
+            val store = com.gal.data.local.PrivateMediaStore(applicationContext)
+            val ok = runCatching {
+                val temp = store.newCapture(false)
+                try {
+                    temp.outputStream().use { check(bm.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
+                    store.commit(temp, "image/jpeg", "EDIT_${System.currentTimeMillis()}.jpg")
+                } finally { temp.delete(); store.close() }
+            }.isSuccess
             withContext(Dispatchers.Main) {
-                Toast.makeText(this@EditActivity, "Saved to Pictures/Gal", Toast.LENGTH_SHORT).show()
-                finish()
+                Toast.makeText(this@EditActivity, if (ok) "Salvo na biblioteca privada" else "Falha ao salvar", Toast.LENGTH_SHORT).show()
+                if (ok) { com.gal.data.local.PrivateMediaStore.notifyChanged(); finish() }
             }
         }
     }
@@ -742,8 +731,7 @@ class EditActivity : ComponentActivity() {
             ).show()
             return
         }
-        val pi = MediaStore.createWriteRequest(contentResolver, listOf(sourceUri))
-        writeLauncher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
+        saveInPlaceAfterPermission()
     }
 
     private fun saveInPlaceAfterPermission() {
@@ -766,7 +754,7 @@ class EditActivity : ComponentActivity() {
                     if (ok) "Saved" else "Save failed",
                     Toast.LENGTH_SHORT,
                 ).show()
-                if (ok) finish()
+                if (ok) { com.gal.data.local.PrivateMediaStore.notifyChanged(); finish() }
             }
         }
     }

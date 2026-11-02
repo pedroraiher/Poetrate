@@ -1,86 +1,37 @@
-<p align="center">
-  <img src="gallery_banner.png" alt="Gallery Banner" />
-</p>
+# Mídia Privada
 
-A private, minimal photo and video gallery for Android.
-No network. No cloud. No tracking.
+Fork de Gallery para Android 13+: uma biblioteca que começa vazia e contém somente
+fotos e vídeos capturados pela câmera interna, além das cópias editadas dessas mídias.
 
-![GitHub all releases](https://img.shields.io/github/downloads/jegly/Gallery/total)
+- Fotos e vídeos ficam em `filesDir/media`, dentro do armazenamento privado do app.
+- Câmera integrada com CameraX, câmera frontal/traseira, foto e vídeo com áudio.
+- Não consulta MediaStore, não pede acesso às fotos do telefone e não importa a galeria existente.
+- Favoritos, álbuns, busca, lixeira, edição e extração de quadros trabalham na biblioteca privada.
+- Compartilhar, abrir em outro app, definir papel de parede e exportar uma pasta são ações explícitas que podem tornar uma cópia acessível fora do app.
+- Desinstalar ou limpar os dados apaga a biblioteca. Backup automático e transferência de dados do Android estão desativados.
+- Armazenamento privado não é criptografia adicional: a proteção é o isolamento e a criptografia do próprio Android.
 
----
+Identificador próprio: `com.pedroraiher.mediarepo` (`.debug` nas compilações de teste),
+para instalar ao lado da galeria original sem ler ou migrar suas mídias.
+O bloqueio de certificados do autor original não é aplicado neste fork; releases
+devem ser assinados com a chave do proprietário deste aplicativo.
 
-## FEATURES
+## Build
 
-    - Photos and video playback
-    - Camera RAW previews (ARW, DNG, NEF, CR2, ORF, RAF, RW2 and more), shown from the JPEG preview embedded in the file
-    - Albums organised by folder
-    - Search by filename
-    - Photo editor — crop, rotate, brightness, contrast, saturation
-    - Pinch to zoom in viewer
-    - Sort by date, modified, size, name
-    - Filter by photo or video
-    - EXIF stripped on share
-    - Pretty themes and stuff
-    - PIP 
+Use o Gradle Wrapper do repositório, JDK compatível com o Android Gradle Plugin e SDK Android 37:
 
-## REQUIREMENTS
-
-    Android 13+
-    arm64-v8a device
-
-## BUILD
-
-    git clone https://github.com/jegly/gal.git
-    cd gal
-    ./gradlew assembleDebug
-
-    APK output: app/build/outputs/apk/debug/app-debug.apk
-
-## STACK
-
-    Kotlin + Jetpack Compose
-    Hilt, Room, DataStore
-    Coil 3, Media3 ExoPlayer
-    
-    
-
-## PERMISSIONS
-
-    READ_MEDIA_IMAGES
-    READ_MEDIA_VIDEO
-    READ_MEDIA_VISUAL_USER_SELECTED
-    MANAGE_MEDIA
-
-    No INTERNET permission.
-
----
-
-## RELEASE SIGNING
-
-Release APKs use hybrid signing (APK Signature Scheme v3.2): the original app key plus an EC P-384 key and an ML-DSA-87 post-quantum key. Android 17 and newer verify the hybrid block, where the ML-DSA-87 key is the signer; earlier Android versions verify the original key as before.
-
-### Checksums
-
-| File | SHA-256 |
-|---|---|
-| `Gallery-4.2.1-PQC-signed.apk` | *sha256:ae163dfbb18b92a3dca17d7c30eec601cd2800c871c87c82e3aa503c441ce3b0* |
-
-### Signing certificate
-
-Use this fingerprint with [Obtainium AppVerifier](https://github.com/ImranR98/Obtainium) to verify the APK was signed by the correct key before installing:
-
-**Certificate SHA-256:** `98d324d4106a368c62729a0a24d9ac9a6b47f8ac4c6585348531f0ee4eb6a04c`
-
-On Android 17 and later the APK is also verified through its post-quantum APK Signature Scheme v3.2 hybrid block:
-
-| v3.2 signer | Certificate SHA-256 |
-|---|---|
-| PQC (ML-DSA-87) | `5f99de5b3195753d4fe8ddabebd2fb27356b2109d6fbb2471fcbbdf21a9e76a6` |
-| Hybrid classical (EC P-384) | `fa8f4a07e6a4f2b7dc6e5ab31fc05592b1414ab9436d1e2e39b35ce3bb2e33a2` |
-
-Verify a download (`apksigner` from build-tools 37.0.0 on JDK 25 shows all three keys):
-
-```bash
-sha256sum Gallery-4.2.1-PQC-signed.apk
-apksigner verify --print-certs Gallery-4.2.1-PQC-signed.apk | grep SHA-256
+```sh
+./gradlew assembleDebug
+./gradlew connectedDebugAndroidTest
 ```
+
+APK: `app/build/outputs/apk/debug/app-debug.apk`.
+
+## Integração futura com nuvem
+
+Veja [docs/cloud-integration.md](docs/cloud-integration.md). Não há login, upload,
+sincronização ou permissão INTERNET nesta versão.
+
+## Origem
+
+Baseado em Gallery (jegly/Gallery). A licença original é mantida em LICENSE.

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -115,8 +116,13 @@ fun TimelineScreen(
                 )
             } else {
                 TopAppBar(
-                    title = {},
+                    title = { Text("Mídia privada") },
                     actions = {
+                        IconButton(onClick = {
+                            context.startActivity(android.content.Intent(context, com.gal.ui.screens.camera.CameraActivity::class.java))
+                        }) {
+                            Icon(androidx.compose.material.icons.Icons.Outlined.PhotoCamera, contentDescription = "Câmera privada")
+                        }
                         SortMenu(sortOrder, viewModel::setSortOrder, showSortMenu) { showSortMenu = it }
                         FilterMenu(filterType, viewModel::setFilterType, showFilterMenu) { showFilterMenu = it }
                         TooltipBox(

@@ -55,9 +55,10 @@ class MediaActionsViewModel @Inject constructor(
         val uris = withContext(Dispatchers.IO) {
             items.mapNotNull {
                 runCatching { exifScrubber.scrubAndShare(context, it.uri) }.getOrNull()
-                    ?: it.uri
+
             }
         }
+        if (uris.isEmpty()) return@launch
         val intent = if (uris.size == 1) {
             Intent(Intent.ACTION_SEND).apply {
                 type = mime

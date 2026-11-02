@@ -163,7 +163,15 @@ fun MediaViewerScreen(
         ActivityResultContracts.StartIntentSenderForResult()
     ) {}
     val launchWrite: (IntentSenderRequest?) -> Unit = { req ->
-        if (req != null) writeLauncher.launch(req) else pending = null
+        if (req != null) writeLauncher.launch(req) else {
+            val operation = pending
+            pending = null
+            when (operation) {
+                is PendingWrite.Rename -> actions.applyRename(operation.media, operation.name) {}
+                is PendingWrite.Rotate -> actions.applyRotate(operation.media, operation.degrees) {}
+                null -> Unit
+            }
+        }
     }
     val launchPlain: (IntentSenderRequest?) -> Unit = { req ->
         req?.let { plainLauncher.launch(it) }

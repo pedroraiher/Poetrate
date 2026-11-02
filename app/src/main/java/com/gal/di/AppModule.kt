@@ -21,11 +21,14 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+    @Provides @Singleton fun provideAlbumTransferSource(
+        source: com.gal.data.transfer.PrivateAlbumTransferSource,
+    ): com.gal.data.transfer.AlbumTransferSource = source
     @Provides @Singleton fun provideContentResolver(@ApplicationContext context: Context): ContentResolver = context.contentResolver
     @Provides @Singleton fun provideLocalDataSource(
-        contentResolver: ContentResolver,
+        store: com.gal.data.local.PrivateMediaStore,
         refresher: MediaStoreRefresher,
-    ): LocalDataSource = LocalDataSource(contentResolver, refresher)
+    ): LocalDataSource = LocalDataSource(store, refresher)
     @Provides @Singleton fun provideVaultCrypto(): VaultCrypto = VaultCrypto()
     @Provides @Singleton fun provideExifScrubber(): ExifScrubber = ExifScrubber()
     @Provides @Singleton fun provideUriValidator(): UriValidator = UriValidator()

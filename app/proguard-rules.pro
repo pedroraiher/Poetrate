@@ -21,7 +21,6 @@
 # ── Security: tamper-detection must survive intact ────────────────────────────
 # SignatureVerifier compares a hardcoded digest; renaming or inlining it would
 # make the check trivially bypassable by a repackager.
--keep class com.gal.security.SignatureVerifier { *; }
 
 # ── Hilt / Dagger ─────────────────────────────────────────────────────────────
 # Hilt's AAR ships consumer rules for the bulk of its internals.
