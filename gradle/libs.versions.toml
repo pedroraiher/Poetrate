@@ -11,6 +11,7 @@ navigation = "2.10.2"
 room = "2.8.5"
 cropper = "4.7.0"
 coil = "3.6.3"
+telephoto = "0.19.0"
 media3 = "1.11.1"
 exifinterface = "1.4.2"
 biometric = "1.4.0-alpha07"
@@ -58,6 +59,8 @@ room-compiler = { group = "androidx.room", name = "room-compiler", version.ref =
 # Coil — image loading, local only
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-video = { group = "io.coil-kt.coil3", name = "coil-video", version.ref = "coil" }
+
+telephoto-coil3 = { group = "me.saket.telephoto", name = "zoomable-image-coil3", version.ref = "telephoto" }
 
 # Media3 ExoPlayer — local video only
 media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }

@@ -19,6 +19,14 @@ Desinstalar ou limpar os dados apaga a biblioteca. Backup automático está desa
 O app não pede leitura de toda a galeria, câmera, microfone ou acesso à internet:
 as interfaces de captura e seleção são fornecidas por outros componentes Android.
 
+## Zoom de fotos
+
+O visualizador usa Telephoto com Coil 3 para carregar regiões do arquivo original
+conforme o zoom aumenta, preservando detalhes sem decodificar toda uma foto grande
+na memória. Uma prévia pode aparecer brevemente enquanto os blocos são carregados.
+Use pinça ou toque duplo para ampliar e arraste para explorar os detalhes.
+Um toque simples mostra os controles; o gesto horizontal continua navegando entre mídias.
+
 ## Atualização
 
 O nome visível é Poetrate. O identificador `com.pedroraiher.mediarepo` (com `.debug`

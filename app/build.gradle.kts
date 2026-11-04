@@ -106,6 +106,7 @@ dependencies {
     // Coil — local image loading only, no network fetcher
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
+    implementation(libs.telephoto.coil3)
 
     // Media3 ExoPlayer — local video only
     implementation(libs.media3.exoplayer)
