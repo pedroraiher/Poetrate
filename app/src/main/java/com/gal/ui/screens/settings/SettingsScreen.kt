@@ -192,6 +192,7 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
+            com.gal.localweb.NotebookConnection()
             SectionHeader("Grid")
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Row(

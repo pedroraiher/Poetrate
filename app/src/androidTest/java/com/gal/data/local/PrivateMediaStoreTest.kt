@@ -204,14 +204,14 @@ class PrivateMediaStoreTest {
         } finally { original.delete() }
     }
 
-    @Test fun manifestDoesNotRequestPublicMediaOrNetworkAccess() {
+    @Test fun manifestOnlyAddsNetworkForExplicitLocalSharing() {
         val permissions = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
             .requestedPermissions.orEmpty().toSet()
         assertFalse("android.permission.READ_MEDIA_IMAGES" in permissions)
         assertFalse("android.permission.READ_MEDIA_VIDEO" in permissions)
         assertFalse("android.permission.READ_EXTERNAL_STORAGE" in permissions)
         assertFalse("android.permission.WRITE_EXTERNAL_STORAGE" in permissions)
-        assertFalse("android.permission.INTERNET" in permissions)
+        assertTrue("android.permission.INTERNET" in permissions)
         assertFalse("android.permission.CAMERA" in permissions)
         assertFalse("android.permission.RECORD_AUDIO" in permissions)
     }

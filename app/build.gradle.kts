@@ -44,6 +44,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    sourceSets["main"].assets.srcDir("../desktop-web")
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -68,6 +70,7 @@ kotlin {
 }
 
 dependencies {
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     implementation(libs.guava)

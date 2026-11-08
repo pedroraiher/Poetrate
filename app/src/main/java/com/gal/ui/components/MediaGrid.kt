@@ -62,10 +62,12 @@ fun MediaGrid(
     val haptic = LocalHapticFeedback.current
     // Leave room at the bottom for the floating nav pill on tab screens; zero elsewhere.
     val bottomInset = LocalFloatingNavBarPadding.current
+    FastScrollGrid(modifier, bottomInset) { gridState ->
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Fixed(columns),
         contentPadding = PaddingValues(bottom = bottomInset + 88.dp),
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
     ) {
         items(media, key = { it.id }) { item ->
             MediaCell(
@@ -79,6 +81,7 @@ fun MediaGrid(
                 },
             )
         }
+    }
     }
 }
 
@@ -96,10 +99,12 @@ fun MediaSectionedGrid(
 ) {
     val haptic = LocalHapticFeedback.current
     val bottomInset = LocalFloatingNavBarPadding.current
+    FastScrollGrid(modifier, bottomInset) { gridState ->
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Fixed(columns),
         contentPadding = PaddingValues(bottom = bottomInset + 88.dp),
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
     ) {
         sections.forEach { section ->
             item(span = { GridItemSpan(maxLineSpan) }, key = "h_${section.label}") {
@@ -125,6 +130,7 @@ fun MediaSectionedGrid(
                 )
             }
         }
+    }
     }
 }
 
