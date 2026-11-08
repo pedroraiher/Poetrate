@@ -20,7 +20,7 @@ android {
 
         // meow meow meow meow
         ndk {
-            abiFilters += "arm64-v8a"
+            abiFilters += providers.gradleProperty("testAbi").getOrElse("arm64-v8a")
         }
     }
 
@@ -50,6 +50,7 @@ android {
         compose = true
         buildConfig = true
     }
+    androidResources { noCompress += "onnx" }
 
     packaging {
         resources {
@@ -70,6 +71,7 @@ kotlin {
 }
 
 dependencies {
+    implementation("org.opencv:opencv:4.12.0")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")

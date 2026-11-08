@@ -28,6 +28,8 @@ class NotebookServer(private val context: Context, private val store: PrivateMed
     @Volatile private var token: String? = null
     private var attempts = 0
     private val expires = System.currentTimeMillis() + 60 * 60 * 1000
+    private val organization by lazy { NotebookOrganizer(context, ::library) }
+    @Volatile private var organizationOpened = false
     private val slots = Semaphore(4)
     private var snapshotVersion = -1L
     private var snapshot = emptyList<Media>()
@@ -50,6 +52,7 @@ class NotebookServer(private val context: Context, private val store: PrivateMed
     override fun stop() {
         token = null; ticket = null; pendingPeer = null
         super.stop()
+        if (organizationOpened) organization.close()
         thumbnails.evictAll()
     }
     private fun json(value: Any, status: Response.Status = Response.Status.OK) =
@@ -98,7 +101,7 @@ class NotebookServer(private val context: Context, private val store: PrivateMed
     }
     private fun route(s: IHTTPSession): Response {
         val path = s.uri
-        if (s.method == Method.GET && path in setOf("/", "/index.html", "/styles.css", "/app.js", "/remote.js", "/logo.png")) {
+        if (s.method == Method.GET && path in setOf("/", "/index.html", "/styles.css", "/app.js", "/remote.js", "/organize.js", "/logo.png")) {
             val name = if (path == "/") "index.html" else path.drop(1)
             val mime = if (name.endsWith("png")) "image/png" else if (name.endsWith("css")) "text/css" else if (name.endsWith("js")) "application/javascript" else "text/html"
             return newChunkedResponse(Response.Status.OK, "$mime; charset=utf-8", context.assets.open(name))
@@ -113,6 +116,19 @@ class NotebookServer(private val context: Context, private val store: PrivateMed
         }
         val cookie = s.headers["cookie"].orEmpty().split(';').map { it.trim() }
         if (token == null || "poetrate=$token" !in cookie) return error("Conecte ao celular para continuar.", Response.Status.UNAUTHORIZED)
+        if (path.startsWith("/api/organize")) {
+            organizationOpened = true
+            if (path == "/api/organize" && s.method == Method.GET) return json(organization.snapshot())
+            if (path.startsWith("/api/organize/face/") && s.method == Method.GET) {
+                val file=organization.thumbnail(path.substringAfterLast('/'))
+                return newFixedLengthResponse(Response.Status.OK,"image/jpeg",FileInputStream(file),file.length())
+            }
+            if (s.method == Method.POST && path in setOf("/api/organize/scan","/api/organize/pause","/api/organize/charging","/api/organize/rename","/api/organize/merge","/api/organize/separate")) {
+                val data=JSONObject(String(body(s,1024*1024),Charsets.UTF_8))
+                return json(organization.action(path.substringAfterLast('/'),data))
+            }
+            return error("Não encontrado.",Response.Status.NOT_FOUND)
+        }
         if (path == "/api/theme" && s.method == Method.GET) return json(JSONObject(theme))
         if (path == "/api/media" && s.method == Method.GET) {
             return json(JSONArray().apply { library().forEach { m -> put(JSONObject().put("id", m.id.toString()).put("name", m.displayName).put("type", if (m.mimeType.startsWith("video/")) "video" else "image").put("size", m.sizeBytes).put("position", m.position).put("date", m.dateAdded.time)) } })

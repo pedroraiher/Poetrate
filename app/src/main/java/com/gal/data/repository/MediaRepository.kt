@@ -42,6 +42,8 @@ class MediaRepository @Inject constructor(
         store.reposition(id, position)
     }
 
+    suspend fun reposition(ids: Set<Long>, position: Int) = withContext(Dispatchers.IO) { store.reposition(ids, position) }
+
     fun timeline(): Flow<List<Media>> = dataSource.timeline()
     fun favourites(): Flow<List<Media>> = dataSource.favourites()
     fun trash(): Flow<List<Media>> = dataSource.trash()

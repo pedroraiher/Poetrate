@@ -84,7 +84,7 @@ fun TimelineScreen(
         if (req != null) launcher.launch(req) else selection.clear()
     }
 
-    var repositionTarget by remember { mutableStateOf<Media?>(null) }
+    var repositionTarget by remember { mutableStateOf<List<Media>?>(null) }
     var showSelectionMenu by remember { mutableStateOf(false) }
 
     var pickerMode by remember { mutableStateOf<PickerMode?>(null) }
@@ -107,8 +107,8 @@ fun TimelineScreen(
                             }
                             DropdownMenu(expanded = showSelectionMenu, onDismissRequest = { showSelectionMenu = false }) {
                                 DropdownMenuItem(
-                                    text = { Text("Reposicionar") }, enabled = selectedItems.size == 1,
-                                    onClick = { showSelectionMenu = false; repositionTarget = selectedItems.single() },
+                                    text = { Text("Reposicionar") }, enabled = selectedItems.isNotEmpty(),
+                                    onClick = { showSelectionMenu = false; repositionTarget = selectedItems.toList() },
                                 )
                                 DropdownMenuItem(text = { Text("Compartilhar") }, onClick = {
                                     showSelectionMenu = false
@@ -180,7 +180,6 @@ fun TimelineScreen(
                     },
                     onMediaLongClick = { item ->
                         selection.toggle(item.id)
-                        if (selection.count == 1) showSelectionMenu = true
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -189,7 +188,8 @@ fun TimelineScreen(
 
         repositionTarget?.let { target ->
             com.gal.ui.components.RepositionDialog(
-                media = target,
+                media = target.first(),
+                selectedIds = target.map { it.id }.toSet(),
                 actions = actions,
                 onDismiss = { repositionTarget = null },
                 onDone = {

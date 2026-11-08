@@ -33,6 +33,7 @@ class MediaActionsViewModel @Inject constructor(
 
     val library = repository.timeline()
 
+    suspend fun reposition(ids: Set<Long>, position: Int) = repository.reposition(ids, position)
     suspend fun reposition(id: Long, position: Int) = repository.reposition(id, position)
 
     val albums: Flow<List<Album>> = repository.albums()

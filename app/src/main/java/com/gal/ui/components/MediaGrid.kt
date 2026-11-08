@@ -67,7 +67,7 @@ fun MediaGrid(
         state = gridState,
         columns = GridCells.Fixed(columns),
         contentPadding = PaddingValues(bottom = bottomInset + 88.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().dragSelection(gridState, media, selectedIds, hapticFeedback, onMediaLongClick),
     ) {
         items(media, key = { it.id }) { item ->
             MediaCell(
@@ -75,10 +75,7 @@ fun MediaGrid(
                 isSelected = item.id in selectedIds,
                 showVideoDuration = showVideoDuration,
                 onClick = { onMediaClick(item) },
-                onLongClick = {
-                    if (hapticFeedback) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onMediaLongClick(item)
-                },
+                onLongClick = null,
             )
         }
     }
@@ -97,6 +94,7 @@ fun MediaSectionedGrid(
     onMediaLongClick: (Media) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val media = remember(sections) { sections.flatMap { it.items } }
     val haptic = LocalHapticFeedback.current
     val bottomInset = LocalFloatingNavBarPadding.current
     FastScrollGrid(modifier, bottomInset) { gridState ->
@@ -104,7 +102,7 @@ fun MediaSectionedGrid(
         state = gridState,
         columns = GridCells.Fixed(columns),
         contentPadding = PaddingValues(bottom = bottomInset + 88.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().dragSelection(gridState, media, selectedIds, hapticFeedback, onMediaLongClick),
     ) {
         sections.forEach { section ->
             item(span = { GridItemSpan(maxLineSpan) }, key = "h_${section.label}") {
@@ -123,10 +121,7 @@ fun MediaSectionedGrid(
                     isSelected = item.id in selectedIds,
                     showVideoDuration = showVideoDuration,
                     onClick = { onMediaClick(item) },
-                    onLongClick = {
-                        if (hapticFeedback) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onMediaLongClick(item)
-                    },
+                    onLongClick = null,
                 )
             }
         }
@@ -141,7 +136,7 @@ fun MediaCell(
     isSelected: Boolean,
     showVideoDuration: Boolean = true,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val shape = MaterialTheme.shapes.small

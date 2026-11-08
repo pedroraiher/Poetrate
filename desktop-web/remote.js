@@ -25,6 +25,7 @@ if (location.protocol !== 'file:') {
     const ids = new Set(items.map(x=>x.id)); selected = new Set([...selected].filter(id=>ids.has(id))); render();
     document.querySelector('.device').textContent = '● Conectado ao celular · rede local';
   }
+  window.poetrateRemote = { api, refresh };
   async function mutation(task) {
     if (busy) return;
     busy = true;

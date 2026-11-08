@@ -20,6 +20,7 @@ fun RepositionDialog(
     actions: MediaActionsViewModel,
     onDismiss: () -> Unit,
     onDone: () -> Unit,
+    selectedIds: Set<Long> = setOf(media.id),
 ) {
     val library by actions.library.collectAsStateWithLifecycle(initialValue = emptyList())
     val current = library.firstOrNull { it.id == media.id }
@@ -28,13 +29,15 @@ fun RepositionDialog(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val target = input.toIntOrNull()
-    val valid = current != null && target != null && target in 1..library.size
+    val maximum = library.size - selectedIds.size + 1
+    val valid = current != null && selectedIds.all { id -> library.any { it.id == id } } && target != null && target in 1..maximum
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
         title = { Text("Reposicionar") },
         text = {
             Column {
                 Text("Posição atual: ${current?.position ?: media.position ?: "—"}. A posição 1 fica embaixo.")
+                if (selectedIds.size > 1) Text("${selectedIds.size} itens: o �ltimo na ordem da galeria (o mais abaixo) ficar� na posi��o digitada. A ordem do grupo ser� preservada.")
                 OutlinedTextField(
                     value = input,
                     onValueChange = { input = it; error = null },
@@ -43,7 +46,7 @@ fun RepositionDialog(
                     label = { Text("Nova posição") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     isError = error != null || (input.isNotEmpty() && !valid),
-                    supportingText = { Text(error ?: "Digite um número de 1 a ${library.size}.") },
+                    supportingText = { Text(error ?: "Digite um número de 1 a ${maximum}.") },
                 )
                 Text("Os itens entre as duas posições serão deslocados automaticamente.")
             }
@@ -54,7 +57,7 @@ fun RepositionDialog(
                 saving = true
                 scope.launch {
                     try {
-                        actions.reposition(media.id, position)
+                        actions.reposition(selectedIds, position)
                         onDone()
                     } catch (cancelled: CancellationException) {
                         throw cancelled

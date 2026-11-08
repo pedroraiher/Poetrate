@@ -127,7 +127,9 @@ class PrivateMediaStore @Inject constructor(@ApplicationContext private val cont
     }
 
     /** Move one item within the active library, atomically shifting the intervening items. */
-    fun reposition(id: Long, target: Int) {
+    fun reposition(id: Long, target: Int) = reposition(setOf(id), target)
+
+    fun reposition(selected: Set<Long>, target: Int) {
         val db = helper.writableDatabase
         db.beginTransaction()
         try {
@@ -141,13 +143,15 @@ class PrivateMediaStore @Inject constructor(@ApplicationContext private val cont
                     }
                 }
             }
-            require(target in 1..entries.size) { "Escolha uma posiÃ§Ã£o de 1 a ${entries.size}." }
-            val from = entries.indexOfFirst { it.first == id }
-            require(from >= 0) { "Esta mÃ­dia nÃ£o estÃ¡ mais na biblioteca." }
-            val ids = entries.map { it.first }.toMutableList()
-            ids.add(target - 1, ids.removeAt(from))
-            for (index in minOf(from, target - 1)..maxOf(from, target - 1)) {
-                db.execSQL("UPDATE media SET sort_position=? WHERE id=?", arrayOf(entries[index].second, ids[index]))
+            val group = entries.map { it.first }.filter { it in selected }
+            require(group.isNotEmpty() && group.size == selected.size) { "A seleção mudou. Selecione os itens novamente." }
+            val maximum = entries.size - group.size + 1
+            require(target in 1..maximum) { "Escolha uma posição de 1 a $maximum para o último item do grupo." }
+            val ids = entries.map { it.first }.filterNot { it in selected }.toMutableList()
+            ids.addAll(target - 1, group)
+            for (index in ids.indices) {
+                if (ids[index] != entries[index].first)
+                    db.execSQL("UPDATE media SET sort_position=? WHERE id=?", arrayOf(entries[index].second, ids[index]))
             }
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }

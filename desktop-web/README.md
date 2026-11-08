@@ -19,3 +19,19 @@ Inclui grade responsiva, busca, filtro, seleção, reposicionamento numérico (1
 Ao abrir via `file://`, importar/remover/reordenar afeta apenas a demonstração; nenhum arquivo original é alterado. Vídeos locais têm controles de reprodução e uma miniatura genérica na grade. As imagens locais são abertas por URLs de objetos.
 
 Não publicar esta interface na nuvem. O modo real espera o servidor do próprio Poetrate na mesma origem.
+
+
+## Organizar pelo notebook
+
+Atualize o celular para Poetrate 0.4.2 ou posterior, inicie a conexão local e
+abra o endereço fornecido pelo app. Na lateral, escolha **✨ Organizar**.
+Use **Analisar fotos**, **Pausar** e a opção de analisar somente carregando.
+A análise ocorre no celular e continua enquanto a conexão local estiver aberta;
+fechar a aba não a interrompe. Encerrar a conexão no celular pausa o trabalho.
+
+Em **Pessoas**, abra um grupo para nomear, separar rostos ou **Unir grupos**.
+Marque vários e confirme: o nome do grupo aberto é mantido. Em **Fotos semelhantes**,
+abra as miniaturas para comparar os originais. Há barras verticais nas listas e na
+janela de união, além de barras horizontais nas fileiras de imagens.
+Tudo é salvo no índice privado do celular, compartilhado com o app.
+O modo de demonstração por index.html não analisa nem simula grupos pessoais.

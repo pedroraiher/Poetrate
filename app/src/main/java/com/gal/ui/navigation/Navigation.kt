@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -74,6 +76,7 @@ private val topLevelRoutes = listOf(
     TopLevelRoute("Photos",     "timeline",   Icons.Filled.PhotoLibrary,  Icons.Outlined.PhotoLibrary),
     TopLevelRoute("Albums",     "albums",     Icons.Filled.GridView,      Icons.Outlined.GridView),
     TopLevelRoute("Favourites", "favourites", Icons.Filled.Favorite,      Icons.Outlined.FavoriteBorder),
+    TopLevelRoute("Organizar", "organize", Icons.Filled.AutoAwesome, Icons.Outlined.AutoAwesome),
     TopLevelRoute("Search",     "search",     Icons.Filled.Search,        Icons.Outlined.Search),
 )
 
@@ -145,6 +148,9 @@ fun GalNavHost() {
                 ) + fadeOut(Motion.defaultEffects())
             },
         ) {
+            composable("organize") {
+                com.gal.organize.OrganizeScreen(onMediaClick = { navController.navigate("viewer/${it.id}/timeline") })
+            }
             composable("timeline") {
                 TimelineScreen(
                     onMediaClick = { navController.navigate("viewer/${it.id}/timeline") },
