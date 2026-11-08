@@ -33,17 +33,27 @@ class PrivateMediaStore @Inject constructor(@ApplicationContext private val cont
 
     private val root get() = File(context.filesDir, "media").also { check(it.isDirectory || it.mkdirs()) }
     private val pending get() = File(context.filesDir, "capture_pending").also { check(it.isDirectory || it.mkdirs()) }
-    private val helper = object : SQLiteOpenHelper(context, "private_media.db", null, 2) {
+    private val helper = object : SQLiteOpenHelper(context, "private_media.db", null, 3) {
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL("CREATE TABLE albums (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, cover TEXT)")
             db.execSQL("""CREATE TABLE media (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL, mime TEXT NOT NULL, album TEXT NOT NULL,
                 added INTEGER NOT NULL, favourite INTEGER NOT NULL DEFAULT 0,
-                trashed INTEGER NOT NULL DEFAULT 0)""")
+                trashed INTEGER NOT NULL DEFAULT 0, sort_position INTEGER NOT NULL DEFAULT 0)""")
         }
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
             if (oldVersion < 2) db.execSQL("ALTER TABLE albums ADD COLUMN cover TEXT")
+            if (oldVersion < 3) {
+                db.execSQL("ALTER TABLE media ADD COLUMN sort_position INTEGER NOT NULL DEFAULT 0")
+                // Preserve the existing visual order, numbering from the bottom.
+                db.rawQuery("SELECT id FROM media ORDER BY added ASC, id ASC", null).use { cursor ->
+                    var position = 1L
+                    while (cursor.moveToNext()) {
+                        db.execSQL("UPDATE media SET sort_position=? WHERE id=?", arrayOf(position++, cursor.getLong(0)))
+                    }
+                }
+            }
         }
     }
 
@@ -58,10 +68,20 @@ class PrivateMediaStore @Inject constructor(@ApplicationContext private val cont
         check(source.renameTo(destination)) { "Could not save capture" }
         try {
             ensureAlbum(album)
-            val id = helper.writableDatabase.insertOrThrow("media", null, ContentValues().apply {
-                put("file", destination.name); put("name", name); put("mime", mime)
-                put("album", album); put("added", System.currentTimeMillis())
-            })
+            val db = helper.writableDatabase
+            val id: Long
+            db.beginTransaction()
+            try {
+                val next = db.rawQuery("SELECT COALESCE(MAX(sort_position), 0) + 1 FROM media", null).use {
+                    it.moveToFirst(); it.getLong(0)
+                }
+                id = db.insertOrThrow("media", null, ContentValues().apply {
+                    put("file", destination.name); put("name", name); put("mime", mime)
+                    put("album", album); put("added", System.currentTimeMillis())
+                    put("sort_position", next)
+                })
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
             notifyChanged()
             return id
         } catch (e: Exception) {
@@ -70,8 +90,8 @@ class PrivateMediaStore @Inject constructor(@ApplicationContext private val cont
         }
     }
 
-    fun list(): List<Media> = helper.readableDatabase.query("media", null, null, null, null, null, "added DESC, id DESC").use { c ->
-        buildList {
+    fun list(): List<Media> = helper.readableDatabase.query("media", null, null, null, null, null, "sort_position DESC, id DESC").use { c ->
+        val items = buildList {
             while (c.moveToNext()) {
                 fun str(key: String) = c.getString(c.getColumnIndexOrThrow(key))
                 fun number(key: String) = c.getLong(c.getColumnIndexOrThrow(key))
@@ -102,6 +122,36 @@ class PrivateMediaStore @Inject constructor(@ApplicationContext private val cont
                     width, height, rotation, file.length(), duration, number("favourite") == 1L, number("trashed") == 1L))
             }
         }
+        var position = items.count { !it.isTrashed }
+        items.map { if (it.isTrashed) it else it.copy(position = position--) }
+    }
+
+    /** Move one item within the active library, atomically shifting the intervening items. */
+    fun reposition(id: Long, target: Int) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            val entries = db.rawQuery(
+                "SELECT id, sort_position, file FROM media WHERE trashed=0 ORDER BY sort_position ASC, id ASC", null,
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        val file = File(root, cursor.getString(2))
+                        if (file.isFile && file.length() > 0) add(cursor.getLong(0) to cursor.getLong(1))
+                    }
+                }
+            }
+            require(target in 1..entries.size) { "Escolha uma posição de 1 a ${entries.size}." }
+            val from = entries.indexOfFirst { it.first == id }
+            require(from >= 0) { "Esta mídia não está mais na biblioteca." }
+            val ids = entries.map { it.first }.toMutableList()
+            ids.add(target - 1, ids.removeAt(from))
+            for (index in minOf(from, target - 1)..maxOf(from, target - 1)) {
+                db.execSQL("UPDATE media SET sort_position=? WHERE id=?", arrayOf(entries[index].second, ids[index]))
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        notifyChanged()
     }
 
     private val covers get() = File(context.filesDir, "album_covers").also { check(it.isDirectory || it.mkdirs()) }

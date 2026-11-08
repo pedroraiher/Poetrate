@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -83,6 +84,9 @@ fun TimelineScreen(
         if (req != null) launcher.launch(req) else selection.clear()
     }
 
+    var repositionTarget by remember { mutableStateOf<Media?>(null) }
+    var showSelectionMenu by remember { mutableStateOf(false) }
+
     var pickerMode by remember { mutableStateOf<PickerMode?>(null) }
 
     Scaffold(
@@ -97,24 +101,33 @@ fun TimelineScreen(
                     selection = selection,
                     allIds = media.map { it.id },
                     actions = {
-                        IconButton(onClick = {
-                            actions.share(selectedItems) { intent ->
-                                context.startActivity(intent)
-                                selection.clear()
+                        Box {
+                            IconButton(onClick = { showSelectionMenu = true }) {
+                                Icon(Icons.Outlined.MoreVert, contentDescription = "Ações da seleção")
                             }
-                        }) { Icon(Icons.Outlined.Share, contentDescription = "Share") }
-                        IconButton(onClick = {
-                            actions.setFavorite(selectedItems, true, launch)
-                        }) { Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Favorite") }
-                        IconButton(onClick = { pickerMode = PickerMode.COPY }) {
-                            Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy to album")
+                            DropdownMenu(expanded = showSelectionMenu, onDismissRequest = { showSelectionMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Reposicionar") }, enabled = selectedItems.size == 1,
+                                    onClick = { showSelectionMenu = false; repositionTarget = selectedItems.single() },
+                                )
+                                DropdownMenuItem(text = { Text("Compartilhar") }, onClick = {
+                                    showSelectionMenu = false
+                                    actions.share(selectedItems) { intent -> context.startActivity(intent); selection.clear() }
+                                })
+                                DropdownMenuItem(text = { Text("Adicionar aos favoritos") }, onClick = {
+                                    showSelectionMenu = false; actions.setFavorite(selectedItems, true, launch)
+                                })
+                                DropdownMenuItem(text = { Text("Copiar para álbum") }, onClick = {
+                                    showSelectionMenu = false; pickerMode = PickerMode.COPY
+                                })
+                                DropdownMenuItem(text = { Text("Mover para álbum") }, onClick = {
+                                    showSelectionMenu = false; pickerMode = PickerMode.MOVE
+                                })
+                                DropdownMenuItem(text = { Text("Excluir") }, onClick = {
+                                    showSelectionMenu = false; actions.trash(selectedItems, launch)
+                                })
+                            }
                         }
-                        IconButton(onClick = { pickerMode = PickerMode.MOVE }) {
-                            Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = "Move to album")
-                        }
-                        IconButton(onClick = {
-                            actions.trash(selectedItems, launch)
-                        }) { Icon(Icons.Outlined.Delete, contentDescription = "Trash") }
                     },
                 )
             } else {
@@ -165,10 +178,26 @@ fun TimelineScreen(
                         if (selection.isActive) selection.toggle(item.id)
                         else onMediaClick(item)
                     },
-                    onMediaLongClick = { item -> selection.toggle(item.id) },
+                    onMediaLongClick = { item ->
+                        selection.toggle(item.id)
+                        if (selection.count == 1) showSelectionMenu = true
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+        }
+
+        repositionTarget?.let { target ->
+            com.gal.ui.components.RepositionDialog(
+                media = target,
+                actions = actions,
+                onDismiss = { repositionTarget = null },
+                onDone = {
+                    repositionTarget = null
+                    selection.clear()
+                    viewModel.setSortOrder(SortOrder.POSITION)
+                },
+            )
         }
 
         pickerMode?.let { mode ->

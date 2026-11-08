@@ -92,11 +92,13 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.gal.model.Media
 import com.gal.security.UriValidator
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -105,6 +107,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun LocalVideoPlayer(
     media: Media,
+    isActive: Boolean,
     modifier: Modifier = Modifier,
     onControlsToggled: (Boolean) -> Unit = {},
 ) {
@@ -123,22 +126,33 @@ fun LocalVideoPlayer(
                     .build(),
                 true,
             )
+            // Avoid decoding an entire GOP after each interactive jump.
+            setSeekParameters(SeekParameters.CLOSEST_SYNC)
             repeatMode = Player.REPEAT_MODE_OFF
-            playWhenReady = true
+            // Pager composition also includes neighbouring, off-screen pages.
+            playWhenReady = false
         }
     }
 
-    LaunchedEffect(safeUri) {
-        exoPlayer.setMediaItem(MediaItem.fromUri(safeUri))
-        exoPlayer.prepare()
+    LaunchedEffect(safeUri, isActive) {
+        if (isActive) {
+            // Defer loading/decoder allocation until this page is actually selected.
+            if (exoPlayer.currentMediaItem?.localConfiguration?.uri != safeUri) {
+                exoPlayer.setMediaItem(MediaItem.fromUri(safeUri))
+                exoPlayer.prepare()
+            }
+            exoPlayer.play()
+        } else {
+            exoPlayer.pause()
+        }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(exoPlayer) {
         onDispose { exoPlayer.release() }
     }
 
     // ── Player state ────────────────────────────────────────────────────────
-    var isPlaying    by remember { mutableStateOf(true) }
+    var isPlaying    by remember { mutableStateOf(false) }
     var isEnded      by remember { mutableStateOf(false) }
     var position     by remember { mutableLongStateOf(0L) }
     var duration     by remember { mutableLongStateOf(1L) }
@@ -161,28 +175,55 @@ fun LocalVideoPlayer(
     LaunchedEffect(repeatMode) { exoPlayer.repeatMode = repeatMode }
     LaunchedEffect(trackParams) { exoPlayer.trackSelectionParameters = trackParams }
 
-    // Observe track info
+    var seekJob by remember { mutableStateOf<Job?>(null) }
+    var pendingSeek by remember { mutableStateOf<Long?>(null) }
+    // Keep only the latest request in a burst, including the +/-10s controls.
+    val seekTo: (Long) -> Unit = { requested ->
+        val end = exoPlayer.duration
+        if (end > 0 && exoPlayer.isCurrentMediaItemSeekable) {
+            val target = requested.coerceIn(0L, end)
+            seekJob?.cancel()
+            pendingSeek = target
+            position = target
+            seekJob = scope.launch {
+                delay(120)
+                exoPlayer.seekTo(target)
+                pendingSeek = null
+            }
+        }
+    }
+
+    // Observe track info and actual player state, including buffering/end changes.
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onTracksChanged(t: Tracks) { tracks = t }
+            override fun onEvents(player: Player, events: Player.Events) {
+                isPlaying = player.playWhenReady
+                isEnded = player.playbackState == Player.STATE_ENDED
+                duration = player.duration.takeIf { it > 0 } ?: 1L
+                if (!isScrubbing && pendingSeek == null) {
+                    position = player.currentPosition.coerceAtLeast(0L)
+                }
+            }
         }
         exoPlayer.addListener(listener)
         onDispose { exoPlayer.removeListener(listener) }
     }
 
-    // Poll player state every 500ms while playing
-    LaunchedEffect(isPlaying, isScrubbing) {
-        while (isPlaying && !isScrubbing) {
-            position = exoPlayer.currentPosition.coerceAtLeast(0L)
-            duration = exoPlayer.duration.coerceAtLeast(1L)
-            isEnded = exoPlayer.playbackState == Player.STATE_ENDED
-            delay(500)
+    // Update the clock even while paused/buffering; dragging keeps its own preview.
+    LaunchedEffect(exoPlayer) {
+        while (true) {
+            if (!isScrubbing && pendingSeek == null) {
+                position = exoPlayer.currentPosition.coerceAtLeast(0L)
+            }
+            duration = exoPlayer.duration.takeIf { it > 0 } ?: 1L
+            delay(250)
         }
     }
 
-    // Auto-hide controls
-    LaunchedEffect(showControls, isPlaying, isInPip) {
-        if (showControls && isPlaying && !isInPip) {
+    // Never remove the slider while a drag is in progress.
+    LaunchedEffect(showControls, isPlaying, isInPip, isScrubbing, pendingSeek) {
+        if (showControls && isPlaying && !isInPip && !isScrubbing && pendingSeek == null) {
             delay(3000)
             showControls = false
             onControlsToggled(false)
@@ -229,6 +270,7 @@ fun LocalVideoPlayer(
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
+                    setEnableComposeSurfaceSyncWorkaround(true)
                     player = exoPlayer
                     useController = false
                     resizeMode = aspectMode
@@ -245,8 +287,7 @@ fun LocalVideoPlayer(
             GestureLayer(
                 onTap = toggleControls,
                 onSeekBy = { delta ->
-                    val newPos = (exoPlayer.currentPosition + delta).coerceIn(0L, exoPlayer.duration)
-                    exoPlayer.seekTo(newPos)
+                    seekTo((pendingSeek ?: exoPlayer.currentPosition) + delta)
                     seekToast = if (delta > 0) "+${delta / 1000}s" else "${delta / 1000}s"
                     scope.launch { delay(700); seekToast = null }
                 },
@@ -338,25 +379,32 @@ fun LocalVideoPlayer(
                     isPlaying = isPlaying,
                     isEnded = isEnded,
                     onPlayPause = {
+                        seekJob?.cancel()
+                        pendingSeek?.let { exoPlayer.seekTo(it) }
+                        pendingSeek = null
                         when {
                             isEnded -> {
                                 exoPlayer.seekTo(0); exoPlayer.play()
                                 isEnded = false; isPlaying = true
                             }
-                            exoPlayer.isPlaying -> { exoPlayer.pause(); isPlaying = false }
-                            else -> { exoPlayer.play(); isPlaying = true }
+                            exoPlayer.playWhenReady -> { exoPlayer.pause() }
+                            else -> { exoPlayer.play() }
                         }
                     },
-                    onSkipBack  = { exoPlayer.seekTo((exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)) },
-                    onSkipFwd   = { exoPlayer.seekTo((exoPlayer.currentPosition + 10_000L).coerceAtMost(exoPlayer.duration)) },
-                    position = position,
+                    onSkipBack  = { seekTo((pendingSeek ?: exoPlayer.currentPosition) - 10_000L) },
+                    onSkipFwd   = { seekTo((pendingSeek ?: exoPlayer.currentPosition) + 10_000L) },
+                    position = if (isScrubbing) (scrubPosition * duration).toLong() else position,
                     duration = duration,
                     sliderValue = if (isScrubbing) scrubPosition
-                                  else position.toFloat() / duration.toFloat(),
-                    onSliderChange = { v -> isScrubbing = true; scrubPosition = v },
+                                  else (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f),
+                    onSliderChange = { v ->
+                        seekJob?.cancel()
+                        pendingSeek = null
+                        isScrubbing = true
+                        scrubPosition = v
+                    },
                     onSliderFinished = {
-                        exoPlayer.seekTo((scrubPosition * duration).toLong())
-                        position = (scrubPosition * duration).toLong()
+                        seekTo((scrubPosition * duration).toLong())
                         isScrubbing = false
                     },
                 )

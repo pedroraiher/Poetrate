@@ -22,6 +22,7 @@ data class Media(
     val duration: Long? = null, // ms, video only
     val isFavourite: Boolean = false,
     val isTrashed: Boolean = false,
+    val position: Int? = null, // 1 = bottom of the library; trash has no position
 )
 
 data class Album(

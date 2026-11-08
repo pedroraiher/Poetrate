@@ -38,6 +38,10 @@ class MediaRepository @Inject constructor(
     companion object {
         private val KEY_SECURE_DELETE = booleanPreferencesKey("secure_delete")
     }
+    suspend fun reposition(id: Long, position: Int) = withContext(Dispatchers.IO) {
+        store.reposition(id, position)
+    }
+
     fun timeline(): Flow<List<Media>> = dataSource.timeline()
     fun favourites(): Flow<List<Media>> = dataSource.favourites()
     fun trash(): Flow<List<Media>> = dataSource.trash()

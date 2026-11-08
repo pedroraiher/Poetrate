@@ -25,6 +25,7 @@ enum class SortOrder(val label: String) {
     DATE_MODIFIED_DESC("Recently modified"),
     SIZE_DESC("Largest first"),
     NAME_ASC("Name A–Z"),
+    POSITION("Posição (1 embaixo)"),
 }
 
 enum class FilterType(val label: String) {
@@ -41,7 +42,7 @@ class TimelineViewModel @Inject constructor(
 
     companion object {
         val KEY_GRID    = intPreferencesKey("grid_columns")
-        val KEY_SORT    = intPreferencesKey("sort_order")
+        val KEY_SORT    = intPreferencesKey("sort_order_v2")
         val KEY_FILTER  = intPreferencesKey("filter_type")
     }
 
@@ -52,8 +53,8 @@ class TimelineViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 3)
 
     val sortOrder = prefs
-        .map { SortOrder.entries.getOrElse(it[KEY_SORT] ?: 0) { SortOrder.DATE_ADDED_DESC } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SortOrder.DATE_ADDED_DESC)
+        .map { SortOrder.entries.getOrElse(it[KEY_SORT] ?: SortOrder.POSITION.ordinal) { SortOrder.POSITION } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SortOrder.POSITION)
 
     val filterType = prefs
         .map { FilterType.entries.getOrElse(it[KEY_FILTER] ?: 0) { FilterType.ALL } }
@@ -70,6 +71,7 @@ class TimelineViewModel @Inject constructor(
             FilterType.VIDEOS -> list.filter { it.type == MediaType.VIDEO }
         }
         when (sort) {
+            SortOrder.POSITION          -> filtered.sortedByDescending { it.position }
             SortOrder.DATE_ADDED_DESC    -> filtered.sortedByDescending { it.dateAdded }
             SortOrder.DATE_ADDED_ASC     -> filtered.sortedBy { it.dateAdded }
             SortOrder.DATE_MODIFIED_DESC -> filtered.sortedByDescending { it.dateModified }
@@ -79,8 +81,10 @@ class TimelineViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Same data as [media] but grouped by day for header rendering. */
-    val sectioned: kotlinx.coroutines.flow.StateFlow<List<DateGroup>> = media
-        .map { it.groupedByDay() }
+    val sectioned: kotlinx.coroutines.flow.StateFlow<List<DateGroup>> = combine(media, sortOrder) { items, sort ->
+            if (sort == SortOrder.POSITION) listOf(DateGroup("Ordem por posição", items))
+            else items.groupedByDay()
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setSortOrder(sort: SortOrder) = viewModelScope.launch {

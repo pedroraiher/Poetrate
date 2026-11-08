@@ -31,6 +31,10 @@ class MediaActionsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
+    val library = repository.timeline()
+
+    suspend fun reposition(id: Long, position: Int) = repository.reposition(id, position)
+
     val albums: Flow<List<Album>> = repository.albums()
 
     // ── Trash / Delete / Restore / Favorite ─────────────────────────────────

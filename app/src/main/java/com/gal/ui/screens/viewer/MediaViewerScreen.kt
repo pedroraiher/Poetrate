@@ -135,6 +135,7 @@ fun MediaViewerScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showInfo by remember { mutableStateOf(false) }
     var showWallpaperDialog by remember { mutableStateOf(false) }
+    var repositionTarget by remember { mutableStateOf<Media?>(null) }
     var renameTarget by remember { mutableStateOf<Media?>(null) }
     var pickerMode by remember { mutableStateOf<PickerMode?>(null) }
 
@@ -200,13 +201,27 @@ fun MediaViewerScreen(
         onDispose { activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
+    // The flow starts empty while loading. Only leave after a populated collection
+    // becomes empty (for example, when its final photo is moved to the trash).
+    var hadMedia by remember { mutableStateOf(false) }
+    LaunchedEffect(mediaList.isEmpty()) {
+        if (mediaList.isNotEmpty()) hadMedia = true
+        else if (hadMedia) onBack()
+    }
     if (mediaList.isEmpty()) return
     val pagerState = rememberPagerState(
         initialPage = viewModel.initialIndex,
         pageCount = { mediaList.size },
     )
+    // A removed page is replaced by the next item at the same index. Removing
+    // the last page instead selects the new last item.
+    LaunchedEffect(mediaList.size) {
+        if (pagerState.currentPage > mediaList.lastIndex) {
+            pagerState.scrollToPage(mediaList.lastIndex)
+        }
+    }
     val currentMedia by remember {
-        derivedStateOf { mediaList.getOrNull(pagerState.currentPage) }
+        derivedStateOf { mediaList.getOrNull(pagerState.currentPage.coerceAtMost(mediaList.lastIndex)) }
     }
     val media = currentMedia ?: return
 
@@ -240,6 +255,7 @@ fun MediaViewerScreen(
                 }
                 MediaType.VIDEO -> LocalVideoPlayer(
                     media = item,
+                    isActive = page == pagerState.currentPage && page == pagerState.settledPage,
                     modifier = Modifier.fillMaxSize(),
                     onControlsToggled = { visible -> showControls = visible },
                 )
@@ -391,6 +407,12 @@ fun MediaViewerScreen(
                         leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null) },
                         onClick = { showMenu = false; actions.openWith(media) },
                     )
+                    if (media.position != null) {
+                        DropdownMenuItem(
+                            text = { Text("Reposicionar") },
+                            onClick = { showMenu = false; repositionTarget = media },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Info") },
                         leadingIcon = { Icon(Icons.Outlined.Info, contentDescription = null) },
@@ -401,9 +423,7 @@ fun MediaViewerScreen(
                         leadingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
                         onClick = {
                             showMenu = false
-                            actions.trash(listOf(media)) { req ->
-                                req?.let { plainLauncher.launch(it) } ?: onBack()
-                            }
+                            actions.trash(listOf(media), launchPlain)
                         },
                     )
                 }
@@ -420,6 +440,14 @@ fun MediaViewerScreen(
 
     if (showInfo) {
         InfoSheet(media = media, onDismiss = { showInfo = false })
+    }
+
+    repositionTarget?.let { target ->
+        com.gal.ui.components.RepositionDialog(
+            media = target, actions = actions,
+            onDismiss = { repositionTarget = null },
+            onDone = { repositionTarget = null },
+        )
     }
 
     renameTarget?.let { target ->
@@ -486,6 +514,7 @@ private fun InfoSheet(media: Media, onDismiss: () -> Unit) {
         ) {
             Text(media.displayName ?: "Unknown", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(12.dp))
+            media.position?.let { InfoRow("Posição", it.toString()) }
             InfoRow("Size", formatBytes(media.sizeBytes))
             InfoRow("Album", media.albumName)
             if (media.width > 0) InfoRow("Resolution", "${media.width} × ${media.height}")
