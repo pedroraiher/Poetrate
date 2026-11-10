@@ -55,7 +55,7 @@ class AlbumViewModel @Inject constructor(
     private val repository: MediaRepository,
 ) : ViewModel() {
 
-    private val albumId: Long = checkNotNull(savedStateHandle["albumId"])
+    val albumId: Long = checkNotNull(savedStateHandle["albumId"])
 
     val media = repository.album(albumId)
         .stateIn(
@@ -75,10 +75,14 @@ fun AlbumScreen(
     onMediaClick: (Media, Int) -> Unit,
     viewModel: AlbumViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
+    albumsViewModel: AlbumsViewModel = hiltViewModel(),
     actions: MediaActionsViewModel = hiltViewModel(),
 ) {
     val media    by viewModel.media.collectAsStateWithLifecycle()
     val settings by settingsViewModel.state.collectAsStateWithLifecycle()
+    val albums by albumsViewModel.albums.collectAsStateWithLifecycle()
+    val currentAlbum=albums.firstOrNull { it.id==viewModel.albumId }
+    val currentName=currentAlbum?.name ?: albumName
     val context = LocalContext.current
 
     val selection = rememberSelectionState()
@@ -93,7 +97,7 @@ fun AlbumScreen(
 
     Scaffold(
         floatingActionButton = {
-            if (!selection.isActive) com.gal.ui.components.LibraryAddFab(album = albumName)
+            if (!selection.isActive) com.gal.ui.components.LibraryAddFab(album = currentName)
         },
         topBar = {
             if (selection.isActive) {
@@ -126,11 +130,12 @@ fun AlbumScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            text = albumName,
+                            text = currentName,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     },
+                    actions = { currentAlbum?.let { AlbumActions(it,onDeleted=onBack,vm=albumsViewModel) } },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

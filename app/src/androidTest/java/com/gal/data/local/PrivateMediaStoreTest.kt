@@ -204,6 +204,73 @@ class PrivateMediaStoreTest {
         } finally { original.delete() }
     }
 
+    @Test fun renameCoverAndDeleteAlbumPreserveOriginalsAndMetadata() {
+        val ids=List(2){capture()}
+        val name="Managed ${System.nanoTime()}"
+        val album=store.createAlbum(name)
+        val other=store.createAlbum("Other ${System.nanoTime()}")
+        try {
+            ids.forEach{store.update(it,"album",name)}
+            store.update(ids[0],"favourite","1")
+            store.update(ids[1],"trashed","1")
+            val before=store.list().filter{it.id in ids}.associateBy{it.id}
+            val bytes=ids.associateWith{store.file(it)!!.readBytes()}
+            store.editAlbum(album,"$name renamed",before.getValue(ids[0]).uri)
+            assertTrue(store.list().filter{it.id in ids}.all{it.albumId==album && it.albumName=="$name renamed"})
+            val cover=store.albums().single{it.id==album}.coverUri!!
+            assertNotEquals(before.getValue(ids[0]).uri,cover)
+            val otherName=store.albums().single{it.id==other}.name
+            assertTrue(runCatching{store.editAlbum(album,otherName)}.isFailure)
+            assertEquals("$name renamed",store.albums().single{it.id==album}.name)
+            store.editAlbum(album,"$name renamed",resetCover=true)
+            assertEquals(before.getValue(ids[0]).uri,store.albums().single{it.id==album}.coverUri)
+            store.deleteAlbum(album)
+            assertFalse(store.albums().any{it.id==album})
+            store.close();store=PrivateMediaStore(context)
+            for(id in ids){
+                val after=store.list().single{it.id==id};val original=before.getValue(id)
+                assertEquals(-1L,after.albumId);assertEquals("",after.albumName)
+                assertEquals(original.position,after.position);assertEquals(original.dateAdded,after.dateAdded)
+                assertEquals(original.isFavourite,after.isFavourite);assertEquals(original.isTrashed,after.isTrashed)
+                assertArrayEquals(bytes.getValue(id),store.file(id)!!.readBytes())
+            }
+            store.update(ids[1],"trashed","0")
+            assertEquals(-1L,store.list().single{it.id==ids[1]}.albumId)
+            assertFalse(store.albums().any{it.id==album})
+        } finally {if(store.albums().any{it.id==album})store.deleteAlbum(album);store.deleteAlbum(other)}
+    }
+
+    @Test fun sharedImportsSupportGeneralLibraryAlbumsAndIntentStreams() {
+        val sourceId=capture();val source=store.list().single{it.id==sourceId}
+        val originalBytes=store.file(sourceId)!!.readBytes()
+        val album=store.createAlbum("Shared ${System.nanoTime()}")
+        try {
+            val general=store.importShared(source.uri,null).also{created.add(it)}
+            val specific=store.importShared(source.uri,album).also{created.add(it)}
+            assertEquals(-1L,store.list().single{it.id==general}.albumId)
+            assertEquals(album,store.list().single{it.id==specific}.albumId)
+            assertTrue(store.list().any{it.id==specific && !it.isTrashed})
+            assertArrayEquals(originalBytes,store.file(sourceId)!!.readBytes())
+            val intent=android.content.Intent(android.content.Intent.ACTION_SEND).setType("image/jpeg").putExtra(android.content.Intent.EXTRA_STREAM,source.uri)
+            assertEquals(listOf(source.uri),com.gal.ui.screens.share.sharedUris(intent))
+            val multiple=android.content.Intent(android.content.Intent.ACTION_SEND_MULTIPLE).setType("*/*").putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM,arrayListOf(source.uri,source.uri,store.list().single{it.id==specific}.uri))
+            assertEquals(2,com.gal.ui.screens.share.sharedUris(multiple).size)
+            val clip=android.content.Intent(android.content.Intent.ACTION_SEND).setType("image/jpeg").apply{clipData=android.content.ClipData.newRawUri("image",source.uri)}
+            assertEquals(listOf(source.uri),com.gal.ui.screens.share.sharedUris(clip))
+            for(type in listOf("image/jpeg","video/mp4")) {
+                val share=android.content.Intent(android.content.Intent.ACTION_SEND).setType(type).setPackage(context.packageName)
+                assertTrue("App must appear for $type",context.packageManager.queryIntentActivities(share,PackageManager.MATCH_DEFAULT_ONLY).isNotEmpty())
+            }
+            assertTrue(context.packageManager.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_SEND_MULTIPLE).setType("*/*").setPackage(context.packageName),PackageManager.MATCH_DEFAULT_ONLY).isNotEmpty())
+            val unsafe=android.content.Intent(android.content.Intent.ACTION_SEND).putExtra(android.content.Intent.EXTRA_STREAM,android.net.Uri.parse("file:///data/private"))
+            assertTrue(runCatching{com.gal.ui.screens.share.sharedUris(unsafe)}.isFailure)
+            store.deleteAlbum(album)
+            val count=store.list().size
+            assertTrue(runCatching{store.importShared(source.uri,album)}.isFailure)
+            assertEquals(count,store.list().size)
+        } finally {if(store.albums().any{it.id==album})store.deleteAlbum(album)}
+    }
+
     @Test fun manifestOnlyAddsNetworkForExplicitLocalSharing() {
         val permissions = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
             .requestedPermissions.orEmpty().toSet()

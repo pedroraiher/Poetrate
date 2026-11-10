@@ -46,12 +46,14 @@ class MainActivity : FragmentActivity() {
 
     @Inject lateinit var refresher: MediaStoreRefresher
     private val settingsViewModel: SettingsViewModel by viewModels()
+    private val receiveShare: com.gal.ui.screens.share.ReceiveShareViewModel by viewModels()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
 
+        if(savedInstanceState==null) receiveShare.accept(intent)
         enableEdgeToEdge()
 
 
@@ -101,7 +103,8 @@ class MainActivity : FragmentActivity() {
                         }
 
                         if (isUnlocked || !settingsState.biometricLock) {
-                            GalApp()
+                            val receiving by receiveShare.active.collectAsStateWithLifecycle()
+                            if(receiving)com.gal.ui.screens.share.ReceiveShareScreen(receiveShare) else GalApp()
                         } else {
                             Box(
                                 modifier = Modifier.fillMaxSize().navigationBarsPadding().statusBarsPadding(),
@@ -135,6 +138,12 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        receiveShare.accept(intent)
     }
 
     override fun onResume() {

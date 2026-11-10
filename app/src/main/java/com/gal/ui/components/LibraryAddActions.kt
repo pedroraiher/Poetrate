@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -165,8 +164,15 @@ fun LibraryAddFab(album: String? = null, viewModel: LibraryAddViewModel = hiltVi
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         viewModel.completeCapture(it.resultCode, it.data?.data)
     }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) {
-        viewModel.importSelected(it, album)
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val uris = buildList {
+                data?.data?.let { add(it) }
+                data?.clipData?.let { clip -> for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { add(it) } }
+            }.distinct()
+            viewModel.importSelected(uris, album)
+        }
     }
     LaunchedEffect(message) {
         message?.let {
@@ -178,7 +184,17 @@ fun LibraryAddFab(album: String? = null, viewModel: LibraryAddViewModel = hiltVi
         actions = listOf(
             AddMenuAction("Abrir câmera", Icons.Outlined.PhotoCamera) { chooseCamera = true },
             AddMenuAction("Adicionar mídia", Icons.Outlined.AddPhotoAlternate) {
-                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "*/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try { picker.launch(Intent.createChooser(intent, "Adicionar pelo aplicativo")) }
+                catch (_: android.content.ActivityNotFoundException) {
+                    viewModel.message.value = "Nenhum aplicativo disponível para selecionar fotos e vídeos."
+                }
             },
         ),
         busy = busy,

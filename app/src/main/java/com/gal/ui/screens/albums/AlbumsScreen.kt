@@ -1,6 +1,7 @@
 package com.gal.ui.screens.albums
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,7 +77,7 @@ import kotlinx.coroutines.withContext
 
 @HiltViewModel
 class AlbumsViewModel @Inject constructor(
-    repository: MediaRepository,
+    private val repository: MediaRepository,
     private val store: PrivateMediaStore,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -99,6 +100,20 @@ class AlbumsViewModel @Inject constructor(
         }
     }
 
+    fun coverImages(albumId: Long) = repository.album(albumId)
+
+    fun edit(album: Album, name: String, cover: Uri?, reset: Boolean, done: () -> Unit) = change(done) { store.editAlbum(album.id,name,cover,reset) }
+    fun delete(album: Album, done: () -> Unit) = change(done) { store.deleteAlbum(album.id) }
+    private fun change(done: () -> Unit, action: () -> Unit) {
+        if(creating.value)return
+        creating.value=true;error.value=null
+        viewModelScope.launch {
+            try {withContext(Dispatchers.IO){action()};done()}
+            catch(e:Exception){error.value=e.message ?: "Não foi possível alterar o álbum."}
+            finally{creating.value=false}
+        }
+    }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,6 +133,9 @@ fun AlbumsScreen(
         onDismiss = { showCreate = false; viewModel.error.value = null },
         onCreate = { name, cover -> viewModel.create(name, cover) { showCreate = false } },
     )
+    var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val selected = albums.firstOrNull { it.id == selectedId }
+    BackHandler(enabled = selected != null) { selectedId = null }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     var columns by remember { mutableIntStateOf(2) }
@@ -134,8 +152,12 @@ fun AlbumsScreen(
         },
         topBar = {
             TopAppBar(
-                title = { Text("Álbuns") },
+                title = { Text(selected?.name ?: "Álbuns") },
+                navigationIcon = { if (selected != null) androidx.compose.material3.TextButton(onClick = { selectedId = null }) { Text("Cancelar") } },
                 actions = {
+                    if (selected != null) {
+                        AlbumActions(selected, onDeleted = { selectedId = null }, vm = viewModel)
+                    } else {
                     IconButton(onClick = { columns = if (columns >= 4) 1 else columns + 1 }) {
                         Icon(
                             if (columns <= 2) Icons.Outlined.GridView else Icons.AutoMirrored.Outlined.ViewList,
@@ -162,6 +184,7 @@ fun AlbumsScreen(
                                 onClick = { showMenu = false; onSettingsClick() },
                             )
                         }
+                    }
                     }
                 },
                 scrollBehavior = scrollBehavior,
@@ -216,7 +239,8 @@ fun AlbumsScreen(
                     AlbumCard(
                         album = album,
                         compact = columns >= 3,
-                        onClick = { onAlbumClick(album) },
+                        onClick = { if (selected != null) selectedId = album.id else onAlbumClick(album) },
+                        onLongClick = { selectedId = album.id },
                     )
                 }
             }
@@ -229,6 +253,7 @@ private fun AlbumCard(
     album: Album,
     compact: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(if (compact) 8.dp else 16.dp)
 
@@ -236,8 +261,9 @@ private fun AlbumCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable(onClick = onClick),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Opções do álbum"),
     ) {
+        Box {
         PrivateThumbnail(
             uri = album.coverUri,
             isVideo = album.coverIsVideo,
@@ -247,6 +273,7 @@ private fun AlbumCard(
                 .aspectRatio(1f)
                 .clip(shape),
         )
+        }
         Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = if (compact) 4.dp else 8.dp)) {
             Text(
                 text = album.name,

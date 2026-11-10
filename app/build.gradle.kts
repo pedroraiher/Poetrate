@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "com.gal"
     compileSdk = 37
+    testBuildType = providers.gradleProperty("testBuildType").getOrElse("debug")
 
     defaultConfig {
         applicationId = "com.pedroraiher.mediarepo"
@@ -36,6 +37,13 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+        }
+        // Optimized distribution that updates Pedro's existing installation in place.
+        create("optimized") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".debug"
+            matchingFallbacks += listOf("release")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
