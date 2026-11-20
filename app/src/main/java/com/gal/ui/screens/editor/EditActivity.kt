@@ -128,7 +128,6 @@ class EditActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         enableEdgeToEdge()
 
         val uriString = intent.getStringExtra(EXTRA_URI) ?: run { finish(); return }

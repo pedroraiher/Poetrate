@@ -180,18 +180,13 @@ fun MediaViewerScreen(
     val settingsViewModel: com.gal.ui.screens.settings.SettingsViewModel = hiltViewModel()
     val settings by settingsViewModel.state.collectAsStateWithLifecycle()
 
-    // Immersive + always-on FLAG_SECURE while viewing private media, independent of the
-    // app-wide "block screenshots" setting (MainActivity only applies FLAG_SECURE when that
-    // setting is on — the viewer must not depend on it). On exit, only clear the flag if the
-    // app-wide setting doesn't also want it on, so we don't fight MainActivity's own effect.
-    DisposableEffect(settings.blockScreenshots) {
+    // Hide system bars while viewing media.
+    DisposableEffect(activity) {
         val window = activity.window
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val ctrl = WindowInsetsControllerCompat(window, window.decorView)
         ctrl.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         ctrl.hide(WindowInsetsCompat.Type.systemBars())
         onDispose {
-            if (!settings.blockScreenshots) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             ctrl.show(WindowInsetsCompat.Type.systemBars())
         }
     }

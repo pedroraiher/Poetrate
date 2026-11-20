@@ -15,12 +15,13 @@ if (location.protocol !== 'file:') {
     }
     return data;
   }
+  let lastLibrary = null;
   async function refresh() {
-    const palette = await api('/api/theme');
-    for (const [key,value] of Object.entries(palette)) {
-      if (['background','surface','container','outline','primary','on-primary','text','muted'].includes(key) && /^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty('--'+key,value);
-    }
     const data = await api('/api/media');
+    const signature=JSON.stringify(data);
+    if(!loading && signature===lastLibrary && items.length===data.length)return;
+    lastLibrary=signature;
+    loading=false;
     items = data.sort((a,b)=>a.position-b.position).map(x=>({...x, thumbnail:`/api/media/${x.id}/thumb`, original:`/api/media/${x.id}/original`, url:`/api/media/${x.id}/thumb`}));
     const ids = new Set(items.map(x=>x.id)); selected = new Set([...selected].filter(id=>ids.has(id))); render();
     document.querySelector('.device').textContent = '● Conectado ao celular · rede local';

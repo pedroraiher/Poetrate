@@ -43,14 +43,11 @@ data class AddMenuAction(val label: String, val icon: ImageVector, val onClick: 
 fun AddMenuFab(actions: List<AddMenuAction>, busy: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     Box(Modifier.padding(bottom = LocalFloatingNavBarPadding.current + 8.dp)) {
-        FloatingActionButton(
-            onClick = { if (!busy) expanded = !expanded },
-            shape = CircleShape,
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-        ) {
-            if (busy) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-            else Icon(Icons.Filled.Add, contentDescription = "Adicionar")
+        LiquidGlass(Modifier.size(62.dp)) {
+            IconButton(onClick = { if (!busy) expanded = !expanded }, modifier = Modifier.fillMaxSize()) {
+                if (busy) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                else JewelIcon(Icons.Filled.Add, "Adicionar")
+            }
         }
         DropdownMenu(expanded = expanded && !busy, onDismissRequest = { expanded = false }) {
             actions.forEach { action ->
@@ -161,6 +158,7 @@ fun LibraryAddFab(album: String? = null, viewModel: LibraryAddViewModel = hiltVi
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     var chooseCamera by rememberSaveable { mutableStateOf(false) }
+    var chooseSource by rememberSaveable { mutableStateOf(false) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         viewModel.completeCapture(it.resultCode, it.data?.data)
     }
@@ -174,6 +172,20 @@ fun LibraryAddFab(album: String? = null, viewModel: LibraryAddViewModel = hiltVi
             viewModel.importSelected(uris, album)
         }
     }
+    val documents = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        viewModel.importSelected(uris, album)
+    }
+    fun openOtherApp(mime: String) {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = mime
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try { picker.launch(Intent.createChooser(intent, "Escolher aplicativo")); chooseSource = false }
+        catch (_: android.content.ActivityNotFoundException) {
+            viewModel.message.value = "Nenhum aplicativo compatível instalado. Use Arquivos e pastas."
+        }
+    }
     LaunchedEffect(message) {
         message?.let {
             android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
@@ -183,22 +195,32 @@ fun LibraryAddFab(album: String? = null, viewModel: LibraryAddViewModel = hiltVi
     AddMenuFab(
         actions = listOf(
             AddMenuAction("Abrir câmera", Icons.Outlined.PhotoCamera) { chooseCamera = true },
-            AddMenuAction("Adicionar mídia", Icons.Outlined.AddPhotoAlternate) {
-                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "*/*"
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                try { picker.launch(Intent.createChooser(intent, "Adicionar pelo aplicativo")) }
-                catch (_: android.content.ActivityNotFoundException) {
-                    viewModel.message.value = "Nenhum aplicativo disponível para selecionar fotos e vídeos."
-                }
-            },
+            AddMenuAction("Adicionar mídia", Icons.Outlined.AddPhotoAlternate) { chooseSource = true },
         ),
         busy = busy,
     )
+    if (chooseSource) {
+        AlertDialog(
+            onDismissRequest = { chooseSource = false },
+            title = { Text("Adicionar mídia de onde?") },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        try {
+                            documents.launch(arrayOf("image/*", "video/*"))
+                            chooseSource = false
+                        } catch (_: android.content.ActivityNotFoundException) {
+                            viewModel.message.value = "O seletor de arquivos do Android não está disponível neste aparelho."
+                        }
+                    }) { Text("Arquivos e pastas") }
+                    Text("Navegue pelo armazenamento interno, Downloads, cartão SD e provedores disponíveis.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { openOtherApp("image/*") }) { Text("Fotos por outro aplicativo") }
+                    TextButton(onClick = { openOtherApp("video/*") }) { Text("Vídeos por outro aplicativo") }
+                }
+            },
+            confirmButton = { TextButton(onClick = { chooseSource = false }) { Text("Cancelar") } },
+        )
+    }
     if (chooseCamera) {
         AlertDialog(
             onDismissRequest = { chooseCamera = false },

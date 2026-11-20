@@ -34,6 +34,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
+import com.gal.ui.components.*
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -102,6 +104,9 @@ fun GalNavHost() {
     // The pill genuinely floats — content fills the full screen and the pill is overlaid
     // at the bottom. Screens read [LocalFloatingNavBarPadding] and add it to their
     // scrollable contentPadding so the last row isn't hidden behind the pill.
+    val layer = rememberGraphicsLayer()
+    val backdrop = androidx.compose.runtime.remember(layer) { GlassBackdrop(layer) }
+    CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
     Box(modifier = Modifier.fillMaxSize()) {
         val bottomPadding = if (showNav) FLOATING_NAV_BAR_HEIGHT else 0.dp
         CompositionLocalProvider(LocalFloatingNavBarPadding provides bottomPadding) {
@@ -153,6 +158,7 @@ fun GalNavHost() {
             }
             composable("timeline") {
                 TimelineScreen(
+                    onFavouritesClick = { navController.navigate("favourites") },
                     onMediaClick = { navController.navigate("viewer/${it.id}/timeline") },
                     onSettingsClick = { navController.navigate("settings") },
                 )
@@ -247,6 +253,7 @@ fun GalNavHost() {
             }
         }
     }   // close outer Box
+    }
 }
 
 @Composable
@@ -262,12 +269,7 @@ private fun FloatingNavBar(
             .padding(horizontal = 24.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 4.dp,
-            shadowElevation = 10.dp,
-        ) {
+        LiquidGlass() {
             Row(
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -294,7 +296,7 @@ private fun NavPill(
     contentDescription: String,
     onClick: () -> Unit,
 ) {
-    val bg = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+    val bg = if (selected) Color.White.copy(alpha = .12f) else Color.Transparent
     val tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
                else MaterialTheme.colorScheme.onSurfaceVariant
     Box(
@@ -305,11 +307,6 @@ private fun NavPill(
             .padding(horizontal = 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier.size(22.dp),
-        )
+        JewelIcon(icon, contentDescription, selected = selected)
     }
 }

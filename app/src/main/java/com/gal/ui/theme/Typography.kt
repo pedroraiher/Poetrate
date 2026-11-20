@@ -130,7 +130,7 @@ val viaodaLibreFamily = FontFamily(
 
 /** User-selectable app font, persisted via [com.gal.ui.screens.settings.SettingsViewModel]. */
 enum class AppFont(val key: String, val displayName: String, val family: FontFamily) {
-    DOTGOTHIC16("dotgothic16", "DotGothic16 (default)", dotgothic16Family),
+    DOTGOTHIC16("dotgothic16", "DotGothic16", dotgothic16Family),
     NUNITO("nunito", "Nunito", nunitoFamily),
     CORMORANT_GARAMOND("cormorant_garamond", "Cormorant Garamond", cormorantGaramondFamily),
     IBM_PLEX_MONO("ibm_plex_mono", "IBM Plex Mono", ibmPlexMonoFamily),

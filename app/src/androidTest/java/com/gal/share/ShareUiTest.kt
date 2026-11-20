@@ -34,6 +34,20 @@ class ShareUiTest {
         }
         error("Could not click: $label")
     }
+    @Test fun importSourceOpensDocumentExplorer() {
+        val context = instrumentation.targetContext
+        context.startActivity(Intent(context, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            click("Photos")
+            click("Adicionar");click("Adicionar mídia")
+            waitFor("Fotos por outro aplicativo");waitFor("Vídeos por outro aplicativo")
+            click("Arquivos e pastas")
+            var documentsOpened = false
+            repeat(100) {
+                if (instrumentation.uiAutomation.rootInActiveWindow?.packageName?.toString()?.contains("documentsui") == true) documentsOpened = true
+                if (!documentsOpened) Thread.sleep(100)
+            }
+            assertTrue("Android document explorer should open", documentsOpened)
+    }
     @Test fun shareDestinationAndAlbumActionsWorkThroughUI() {
         val context=instrumentation.targetContext;val store=PrivateMediaStore(context)
         val originalIds=store.list().map{it.id}.toSet()
@@ -68,6 +82,7 @@ class ShareUiTest {
             assertFalse(store.albums().any{it.id==album})
             assertEquals(-1L,store.list().single{it.id==imported}.albumId)
             assertTrue(store.file(imported)!!.exists());assertTrue(store.file(source)!!.exists())
+
         } finally {
             if(store.albums().any{it.id==album})store.deleteAlbum(album)
             store.list().filter{it.id !in originalIds}.forEach{store.delete(it.id)}

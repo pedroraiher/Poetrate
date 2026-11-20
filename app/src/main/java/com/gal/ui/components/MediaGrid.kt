@@ -62,7 +62,7 @@ fun MediaGrid(
     val haptic = LocalHapticFeedback.current
     // Leave room at the bottom for the floating nav pill on tab screens; zero elsewhere.
     val bottomInset = LocalFloatingNavBarPadding.current
-    FastScrollGrid(modifier, bottomInset) { gridState ->
+    FastScrollGrid(modifier.glassSource(), bottomInset) { gridState ->
     LazyVerticalGrid(
         state = gridState,
         columns = GridCells.Fixed(columns),
@@ -93,19 +93,21 @@ fun MediaSectionedGrid(
     onMediaClick: (Media) -> Unit,
     onMediaLongClick: (Media) -> Unit,
     modifier: Modifier = Modifier,
+    header: (@Composable () -> Unit)? = null,
 ) {
     val media = remember(sections) { sections.flatMap { it.items } }
     val haptic = LocalHapticFeedback.current
     val bottomInset = LocalFloatingNavBarPadding.current
-    FastScrollGrid(modifier, bottomInset) { gridState ->
+    FastScrollGrid(modifier.glassSource(), bottomInset) { gridState ->
     LazyVerticalGrid(
         state = gridState,
         columns = GridCells.Fixed(columns),
         contentPadding = PaddingValues(bottom = bottomInset + 88.dp),
         modifier = Modifier.fillMaxSize().dragSelection(gridState, media, selectedIds, hapticFeedback, onMediaLongClick),
     ) {
+        if (header != null) item(key = "gallery-controls", span = { GridItemSpan(maxLineSpan) }) { header() }
         sections.forEach { section ->
-            item(span = { GridItemSpan(maxLineSpan) }, key = "h_${section.label}") {
+            if (section.label.isNotBlank()) item(span = { GridItemSpan(maxLineSpan) }, key = "h_${section.label}") {
                 Text(
                     section.label,
                     style = MaterialTheme.typography.titleSmall,
@@ -139,7 +141,7 @@ fun MediaCell(
     onLongClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val shape = MaterialTheme.shapes.small
+    val shape = RoundedCornerShape(percent = 8)
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()

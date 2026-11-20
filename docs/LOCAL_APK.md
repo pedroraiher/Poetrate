@@ -36,6 +36,8 @@ datas ou favoritos. Mídias sem álbum usam album="" e albumId=-1 e continuam
 aparecendo normalmente na biblioteca geral.
 
 A capa personalizada é escolhida entre as fotos do próprio álbum. Álbuns novos
-começam com capa automática. Adicionar mídia usa ACTION_GET_CONTENT com chooser,
-seleção múltipla e filtro de imagens/vídeos, permitindo escolher provedores
-compatíveis instalados (como Arquivos e Google Fotos).
+começam com capa automática. Adicionar mídia oferece Arquivos e pastas via
+ACTION_OPEN_DOCUMENT (seleção múltipla de fotos e vídeos), além de fotos ou
+vídeos por outros aplicativos via ACTION_GET_CONTENT com MIME específico.
+O chooser de aplicativos não exige CATEGORY_OPENABLE, para incluir apps de
+fotos que não anunciam essa categoria. A importação copia o conteúdo para o app.

@@ -1,5 +1,6 @@
 package com.gal.ui.screens.albums
 
+import com.gal.ui.components.glassSource
 import androidx.compose.foundation.combinedClickable
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -218,7 +219,7 @@ fun AlbumsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxSize().glassSource()
                     .pointerInput(Unit) {
                         detectTransformGestures { _, _, zoom, _ ->
                             pinchAccum *= zoom

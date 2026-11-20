@@ -1,5 +1,7 @@
 package com.gal.ui.theme
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,52 +27,33 @@ val GalShapes = Shapes(
     extraLarge = RoundedCornerShape(32.dp),
 )
 
+private val brown = Color(0xFF191411)
+private val gold = Color(0xFFE8BB88)
+private val ivory = Color(0xFFFAEFE3)
+val galleryGradient = Brush.linearGradient(listOf(Color(0xFF171210), Color(0xFF34271D), Color(0xFF100E0D), brown))
+private val palette = darkColorScheme(
+    primary = gold, secondary = Color(0xFFD9C1A7), tertiary = Color(0xFFDBAE78),
+    onPrimary = brown, onSecondary = brown, onTertiary = brown,
+    primaryContainer = Color(0xFF5B412C), secondaryContainer = Color(0xFF443629), tertiaryContainer = Color(0xFF503B29),
+    onPrimaryContainer = ivory, onSecondaryContainer = ivory, onTertiaryContainer = ivory,
+    background = brown, surface = brown, onSurface = ivory, onBackground = ivory,
+    surfaceVariant = Color(0xFF40352E), onSurfaceVariant = Color(0xFFD8C8B9),
+    surfaceContainerLowest = Color(0xFF110E0C), surfaceContainerLow = Color(0xFF231C18),
+    surfaceContainer = Color(0xFF2A221C), surfaceContainerHigh = Color(0xFF352B24),
+    surfaceContainerHighest = Color(0xFF42362D), outline = Color(0xFF9D8978), surfaceTint = gold
+)
+
 @Composable
-fun GalTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    themeMode: String = "system",
-    catppuccinAccent: String = "mauve",
-    draculaAccent: String = "purple",
-    ptyxisPalette: String = "nord",
-    appFont: String = "dotgothic16",
-    content: @Composable () -> Unit,
-) {
-    val context = LocalContext.current
-    val dynamicScheme = if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-
-    val colorScheme = when (themeMode) {
-        "catppuccin" -> {
-            val dynAccent = if (catppuccinAccent == "dynamic") dynamicScheme.primary else null
-            catppuccinColorScheme(catppuccinAccent, dynAccent)
-        }
-        "dracula" -> {
-            val dynAccent = if (draculaAccent == "dynamic") dynamicScheme.primary else null
-            draculaColorScheme(draculaAccent, dynAccent)
-        }
-        "ptyxis" -> ptyxisColorScheme(ptyxisPalette)
-        "wallpaper" -> dynamicScheme
-        else -> if (darkTheme) darkColorScheme() else lightColorScheme()
-    }
-
+fun GalTheme(appFont: String = "nunito", content: @Composable () -> Unit) {
     val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as Activity).window
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            val insetsController = WindowCompat.getInsetsController(window, view)
-            insetsController.isAppearanceLightStatusBars = when (themeMode) {
-                "catppuccin", "dracula", "ptyxis" -> false
-                else -> !darkTheme
-            }
+    if (!view.isInEditMode) SideEffect {
+        val window = (view.context as Activity).window
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
         }
     }
-
-    val typography = remember(appFont) { buildGalTypography(appFontFromKey(appFont).family) }
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        shapes = GalShapes,
-        typography = typography,
-        content = content,
-    )
+    MaterialTheme(colorScheme = palette, shapes = GalShapes,
+        typography = remember(appFont) { buildGalTypography(appFontFromKey(appFont).family) }, content = content)
 }

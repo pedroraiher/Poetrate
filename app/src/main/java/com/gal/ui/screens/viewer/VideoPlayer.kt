@@ -3,7 +3,16 @@ package com.gal.ui.screens.viewer
 import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
-import android.media.AudioManager
+import android.view.LayoutInflater
+import com.gal.R
+import com.gal.ui.components.*
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.util.Rational
@@ -19,7 +28,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,7 +49,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AspectRatio
-import androidx.compose.material.icons.outlined.BrightnessHigh
 import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.ClosedCaptionOff
@@ -156,6 +164,7 @@ fun LocalVideoPlayer(
     var isEnded      by remember { mutableStateOf(false) }
     var position     by remember { mutableLongStateOf(0L) }
     var duration     by remember { mutableLongStateOf(1L) }
+    var showOptions by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
     var isScrubbing  by remember { mutableStateOf(false) }
     var scrubPosition by remember { mutableFloatStateOf(0f) }
@@ -222,8 +231,8 @@ fun LocalVideoPlayer(
     }
 
     // Never remove the slider while a drag is in progress.
-    LaunchedEffect(showControls, isPlaying, isInPip, isScrubbing, pendingSeek) {
-        if (showControls && isPlaying && !isInPip && !isScrubbing && pendingSeek == null) {
+    LaunchedEffect(showControls, isPlaying, isInPip, isScrubbing, pendingSeek, showOptions) {
+        if (showControls && !showOptions && isPlaying && !isInPip && !isScrubbing && pendingSeek == null) {
             delay(3000)
             showControls = false
             onControlsToggled(false)
@@ -247,9 +256,8 @@ fun LocalVideoPlayer(
         }
     }
 
-    // Gesture overlay state — brightness / volume indicators
-    var brightnessOverlay by remember { mutableStateOf<Float?>(null) }
-    var volumeOverlay     by remember { mutableStateOf<Float?>(null) }
+    // Gesture overlay state — volume indicators
+
     var seekToast         by remember { mutableStateOf<String?>(null) }
 
     // Single-tap → toggle controls. Pulled out so it can be triggered by the gesture
@@ -258,9 +266,13 @@ fun LocalVideoPlayer(
     val toggleControls: () -> Unit = {
         val next = !showControls
         showControls = next
+        if (!next) showOptions = false
         onControlsToggled(next)
     }
 
+    val videoLayer = rememberGraphicsLayer()
+    val videoBackdrop = remember(videoLayer) { GlassBackdrop(videoLayer) }
+    CompositionLocalProvider(LocalGlassBackdrop provides videoBackdrop) {
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -269,7 +281,7 @@ fun LocalVideoPlayer(
         // Video surface
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                (LayoutInflater.from(ctx).inflate(R.layout.video_texture, null) as PlayerView).apply {
                     setEnableComposeSurfaceSyncWorkaround(true)
                     player = exoPlayer
                     useController = false
@@ -278,12 +290,12 @@ fun LocalVideoPlayer(
                 }
             },
             update = { it.resizeMode = aspectMode },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().glassSource(),
         )
 
         // Hide everything in PiP mode
         if (!isInPip) {
-            // Gesture layer (single tap toggle + double-tap seek + vertical drag brightness/volume)
+            // Gesture layer (single tap toggle + double-tap seek)
             GestureLayer(
                 onTap = toggleControls,
                 onSeekBy = { delta ->
@@ -291,31 +303,12 @@ fun LocalVideoPlayer(
                     seekToast = if (delta > 0) "+${delta / 1000}s" else "${delta / 1000}s"
                     scope.launch { delay(700); seekToast = null }
                 },
-                onBrightnessDelta = { dy ->
-                    if (activity == null) return@GestureLayer
-                    val attrs = activity.window.attributes
-                    val current = if (attrs.screenBrightness < 0f) 0.5f else attrs.screenBrightness
-                    val next = (current + dy).coerceIn(0f, 1f)
-                    attrs.screenBrightness = next
-                    activity.window.attributes = attrs
-                    brightnessOverlay = next
-                    scope.launch { delay(700); brightnessOverlay = null }
-                },
-                onVolumeDelta = { dy ->
-                    val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                    val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                    val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-                    val target = (cur + (dy * max).toInt()).coerceIn(0, max)
-                    am.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
-                    volumeOverlay = target / max.toFloat()
-                    scope.launch { delay(700); volumeOverlay = null }
-                },
                 modifier = Modifier.fillMaxSize(),
             )
 
             // ── Right-side icon column ──────────────────────────────────────
             AnimatedVisibility(
-                visible = showControls,
+                visible = showControls && showOptions,
                 enter = fadeIn(), exit = fadeOut(),
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -374,6 +367,7 @@ fun LocalVideoPlayer(
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 BottomBar(
+                    onOptionsClick = { showOptions = !showOptions },
                     isMuted = isMuted,
                     onMuteToggle = { isMuted = !isMuted },
                     isPlaying = isPlaying,
@@ -412,12 +406,7 @@ fun LocalVideoPlayer(
         }
 
         // Gesture overlays — always visible while a gesture is active
-        brightnessOverlay?.let {
-            CenterOverlay(icon = Icons.Outlined.BrightnessHigh, label = "Brightness", value = it)
-        }
-        volumeOverlay?.let {
-            CenterOverlay(icon = Icons.AutoMirrored.Outlined.VolumeUp, label = "Volume", value = it)
-        }
+
         seekToast?.let { label ->
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Surface(
@@ -438,12 +427,12 @@ fun LocalVideoPlayer(
     }
 }
 
+}
+
 @Composable
 private fun GestureLayer(
     onTap: () -> Unit,
     onSeekBy: (Long) -> Unit,
-    onBrightnessDelta: (Float) -> Unit,
-    onVolumeDelta: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -458,19 +447,7 @@ private fun GestureLayer(
                     },
                 )
             }
-            // Vertical drag: left half → brightness, right half → volume
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragStart = { },
-                    onDragEnd = { },
-                    onVerticalDrag = { change, dy ->
-                        val frac = -dy / size.height.toFloat()
-                        if (change.position.x < size.width / 2f) onBrightnessDelta(frac)
-                        else onVolumeDelta(frac)
-                        change.consume()
-                    },
-                )
-            },
+            ,
     )
 }
 
@@ -487,13 +464,7 @@ private fun RightControlColumn(
     onTrackToggle: (TrackSelectionOverride?) -> Unit,
     onCaptureFrame: () -> Unit,
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 6.dp,
-        shadowElevation = 8.dp,
-    ) {
+    LiquidGlass {
         Column(
             modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -620,11 +591,6 @@ private fun RightControlColumn(
     }
 }
 
-/**
- * Stateful chip-like button used in the right-side control column. When `active`, fills
- * with `secondaryContainer` — matches the dynamic-colour treatment Material You picks
- * for "an option is engaged" indicators (same role used in the nav bar selected pill).
- */
 @Composable
 private fun ControlButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -663,13 +629,10 @@ private fun ControlButton(
     }
 }
 
-/**
- * Floating Material You bottom bar. Surface-tinted (picks up the wallpaper accent on
- * "wallpaper" / dynamic themes), shaped, elevated. Position/duration labels flank the
- * scrub track; a filled primary play/pause button anchors the transport row.
- */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun BottomBar(
+    onOptionsClick: () -> Unit,
     isMuted: Boolean,
     onMuteToggle: () -> Unit,
     isPlaying: Boolean,
@@ -683,16 +646,8 @@ private fun BottomBar(
     onSliderChange: (Float) -> Unit,
     onSliderFinished: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier
-            .navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 6.dp,
-        shadowElevation = 10.dp,
+    LiquidGlass(
+        Modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -707,13 +662,25 @@ private fun BottomBar(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+                val timelineState = remember { androidx.compose.material3.SliderState(value = sliderValue) }
+                timelineState.value = sliderValue
                 Slider(
-                    value = sliderValue,
+                    state = timelineState,
                     onValueChange = onSliderChange,
                     onValueChangeFinished = onSliderFinished,
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 8.dp),
+                    thumb = {
+                        Box(Modifier.size(14.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                    },
+                    track = {
+                        val active = MaterialTheme.colorScheme.primary
+                        Canvas(Modifier.fillMaxWidth().height(3.dp)) {
+                            drawLine(Color.White.copy(alpha = .3f), Offset(0f, size.height / 2), Offset(size.width, size.height / 2), size.height, StrokeCap.Round)
+                            drawLine(active, Offset(0f, size.height / 2), Offset(size.width * sliderValue, size.height / 2), size.height, StrokeCap.Round)
+                        }
+                    },
                     colors = SliderDefaults.colors(
                         thumbColor = MaterialTheme.colorScheme.primary,
                         activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -788,48 +755,7 @@ private fun BottomBar(
                         modifier = Modifier.size(28.dp),
                     )
                 }
-                // Balancing slot so the play button stays centred.
-                Spacer(Modifier.size(40.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun CenterOverlay(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    value: Float,
-) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Surface(
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 6.dp,
-            shadowElevation = 12.dp,
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp),
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(label, style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { value.coerceIn(0f, 1f) },
-                    modifier = Modifier
-                        .width(160.dp)
-                        .height(6.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                )
+                IconButton(onClick = onOptionsClick) { JewelIcon(Icons.Outlined.MoreVert, "Opções do vídeo") }
             }
         }
     }

@@ -59,7 +59,7 @@ class NotebookServer(private val context: Context, private val store: PrivateMed
         newFixedLengthResponse(status, "application/json", value.toString())
     private fun error(message: String, status: Response.Status = Response.Status.BAD_REQUEST) = json(JSONObject().put("error", message), status)
     override fun serve(session: IHTTPSession): Response {
-        if (!slots.tryAcquire()) return error("Ocupado. Tente novamente.", Response.Status.SERVICE_UNAVAILABLE)
+        if (!slots.tryAcquire(2, java.util.concurrent.TimeUnit.SECONDS)) return error("Ocupado. Tente novamente.", Response.Status.SERVICE_UNAVAILABLE)
         try {
             val host = session.headers["host"]
             val origin = session.headers["origin"]
@@ -131,7 +131,7 @@ class NotebookServer(private val context: Context, private val store: PrivateMed
         }
         if (path == "/api/theme" && s.method == Method.GET) return json(JSONObject(theme))
         if (path == "/api/media" && s.method == Method.GET) {
-            return json(JSONArray().apply { library().forEach { m -> put(JSONObject().put("id", m.id.toString()).put("name", m.displayName).put("type", if (m.mimeType.startsWith("video/")) "video" else "image").put("size", m.sizeBytes).put("position", m.position).put("date", m.dateAdded.time)) } })
+            return json(JSONArray().apply { library().forEach { m -> put(JSONObject().put("id", m.id.toString()).put("name", m.displayName).put("type", if (m.mimeType.startsWith("video/")) "video" else "image").put("size", m.sizeBytes).put("position", m.position).put("date", m.dateAdded.time).put("modified", m.dateModified.time).put("width",m.width).put("height",m.height).put("rotation",m.orientation).put("favourite",m.isFavourite)) } })
         }
         if (path == "/api/upload" && s.method == Method.POST) return upload(s)
         val match = Regex("/api/media/(\\d+)/(thumb|original|position|trash)").matchEntire(path) ?: return error("Não encontrado.", Response.Status.NOT_FOUND)

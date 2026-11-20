@@ -1,5 +1,6 @@
 package com.gal
 
+import androidx.compose.foundation.background
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -61,28 +62,13 @@ class MainActivity : FragmentActivity() {
             val settingsState by settingsViewModel.state.collectAsStateWithLifecycle()
             val view = LocalView.current
 
-            // App-wide screenshot blocking (FLAG_SECURE on the main window)
-            DisposableEffect(settingsState.blockScreenshots) {
-                val blockScreenshots = settingsState.blockScreenshots
-                if (blockScreenshots) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                onDispose {
-                    if (blockScreenshots) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                }
-            }
-
             // Tapjacking protection: ignore touches when overlaid by another window
             DisposableEffect(settingsState.filterTouches) {
                 view.filterTouchesWhenObscured = settingsState.filterTouches
                 onDispose { view.filterTouchesWhenObscured = false }
             }
 
-            GalTheme(
-                themeMode        = settingsState.themeMode,
-                catppuccinAccent = settingsState.catppuccinAccent,
-                draculaAccent    = settingsState.draculaAccent,
-                ptyxisPalette    = settingsState.ptyxisPalette,
-                appFont          = settingsState.appFont,
-            ) {
+            GalTheme(appFont = settingsState.appFont) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
@@ -107,7 +93,7 @@ class MainActivity : FragmentActivity() {
                             if(receiving)com.gal.ui.screens.share.ReceiveShareScreen(receiveShare) else GalApp()
                         } else {
                             Box(
-                                modifier = Modifier.fillMaxSize().navigationBarsPadding().statusBarsPadding(),
+                                modifier = Modifier.fillMaxSize().background(com.gal.ui.theme.galleryGradient).navigationBarsPadding().statusBarsPadding(),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -119,14 +105,15 @@ class MainActivity : FragmentActivity() {
                                     )
                                     Spacer(Modifier.height(24.dp))
                                     Text(
-                                        "Poetrate bloqueada",
+                                        "Poetrate bloqueado",
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
                                         style = MaterialTheme.typography.headlineSmall,
                                         modifier = Modifier.padding(bottom = 32.dp)
                                     )
                                     Button(onClick = {
                                         authenticate { success -> if (success) isUnlocked = true }
                                     }) {
-                                        Text("Unlock with Biometrics")
+                                        Text("Desbloquear com biometria", fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif)
                                     }
                                 }
                             }
@@ -174,7 +161,7 @@ class MainActivity : FragmentActivity() {
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Desbloquear Poetrate")
-            .setSubtitle("Authenticate to view your gallery")
+            .setSubtitle("Confirme sua identidade para abrir a galeria")
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
             .setConfirmationRequired(false)
             .build()

@@ -50,6 +50,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
+val GRID_COLUMN_OPTIONS = listOf(2, 3, 4, 5, 16, 28)
+
 data class SettingsState(
     val gridColumns: Int = 3,
     val stripExifOnShare: Boolean = true,
@@ -59,13 +61,12 @@ data class SettingsState(
     val showVideoDuration: Boolean = true,
     val hapticFeedback: Boolean = true,
     val keepScreenOn: Boolean = false,
-    val blockScreenshots: Boolean = false,
     val filterTouches: Boolean = true,
     val themeMode: String = "system",
     val catppuccinAccent: String = "mauve",
     val draculaAccent: String = "purple",
     val ptyxisPalette: String = "nord",
-    val appFont: String = "dotgothic16",
+    val appFont: String = "nunito",
     val isLoaded: Boolean = false,
 )
 
@@ -83,7 +84,6 @@ class SettingsViewModel @Inject constructor(
         val KEY_SHOW_VIDEO_DURATION    = booleanPreferencesKey("show_video_duration")
         val KEY_HAPTIC_FEEDBACK        = booleanPreferencesKey("haptic_feedback")
         val KEY_KEEP_SCREEN_ON         = booleanPreferencesKey("keep_screen_on")
-        val KEY_BLOCK_SCREENSHOTS      = booleanPreferencesKey("block_screenshots")
         val KEY_FILTER_TOUCHES         = booleanPreferencesKey("filter_touches")
         val KEY_THEME_MODE             = stringPreferencesKey("theme_mode")
         val KEY_CATPPUCCIN_ACCENT      = stringPreferencesKey("catppuccin_accent")
@@ -102,13 +102,12 @@ class SettingsViewModel @Inject constructor(
             showVideoDuration    = p[KEY_SHOW_VIDEO_DURATION]    ?: true,
             hapticFeedback       = p[KEY_HAPTIC_FEEDBACK]        ?: true,
             keepScreenOn         = p[KEY_KEEP_SCREEN_ON]         ?: false,
-            blockScreenshots     = p[KEY_BLOCK_SCREENSHOTS]      ?: false,
             filterTouches        = p[KEY_FILTER_TOUCHES]         ?: true,
             themeMode            = p[KEY_THEME_MODE]             ?: "system",
             catppuccinAccent     = p[KEY_CATPPUCCIN_ACCENT]      ?: "mauve",
             draculaAccent        = p[KEY_DRACULA_ACCENT]         ?: "purple",
             ptyxisPalette        = p[KEY_PTYXIS_PALETTE]         ?: "nord",
-            appFont              = p[KEY_APP_FONT]               ?: "dotgothic16",
+            appFont              = p[KEY_APP_FONT]               ?: "nunito",
             isLoaded             = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsState())
@@ -121,7 +120,6 @@ class SettingsViewModel @Inject constructor(
     fun setShowVideoDuration(v: Boolean) = viewModelScope.launch { dataStore.edit { it[KEY_SHOW_VIDEO_DURATION]    = v } }
     fun setHapticFeedback(v: Boolean)    = viewModelScope.launch { dataStore.edit { it[KEY_HAPTIC_FEEDBACK]        = v } }
     fun setKeepScreenOn(v: Boolean)      = viewModelScope.launch { dataStore.edit { it[KEY_KEEP_SCREEN_ON]         = v } }
-    fun setBlockScreenshots(v: Boolean)  = viewModelScope.launch { dataStore.edit { it[KEY_BLOCK_SCREENSHOTS]      = v } }
     fun setFilterTouches(v: Boolean)     = viewModelScope.launch { dataStore.edit { it[KEY_FILTER_TOUCHES]         = v } }
     fun setThemeMode(v: String)          = viewModelScope.launch { dataStore.edit { it[KEY_THEME_MODE]             = v } }
     fun setCatppuccinAccent(v: String)   = viewModelScope.launch { dataStore.edit { it[KEY_CATPPUCCIN_ACCENT]      = v } }
@@ -204,10 +202,10 @@ fun SettingsScreen(
                     Text("${state.gridColumns}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 }
                 Slider(
-                    value = state.gridColumns.toFloat(),
-                    onValueChange = { viewModel.setGridColumns(it.roundToInt()) },
-                    valueRange = 2f..6f,
-                    steps = 3,
+                    value = GRID_COLUMN_OPTIONS.indexOf(state.gridColumns).coerceAtLeast(0).toFloat(),
+                    onValueChange = { viewModel.setGridColumns(GRID_COLUMN_OPTIONS[it.roundToInt()]) },
+                    valueRange = 0f..5f,
+                    steps = 4,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -302,12 +300,7 @@ fun SettingsScreen(
                 checked = state.secureThumbnailCache,
                 onCheckedChange = { viewModel.setSecureThumbnailCache(it) },
             )
-            SettingsToggle(
-                title = "Block screenshots",
-                subtitle = "Prevent screenshots and screen recording throughout the entire app",
-                checked = state.blockScreenshots,
-                onCheckedChange = { viewModel.setBlockScreenshots(it) },
-            )
+
             SettingsToggle(
                 title = "Tapjacking protection",
                 subtitle = "Ignore taps when another window overlays this app",
@@ -323,128 +316,6 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             SectionHeader("Display")
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                val themeOptions = listOf(
-                    "system"     to "System",
-                    "wallpaper"  to "Wallpaper",
-                    "catppuccin" to "Catppuccin",
-                    "dracula"    to "Dracula",
-                    "ptyxis"     to "Ptyxis",
-                )
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                ) {
-                    themeOptions.forEachIndexed { i, (key, label) ->
-                        SegmentedButton(
-                            selected = state.themeMode == key,
-                            onClick  = { viewModel.setThemeMode(key) },
-                            shape    = SegmentedButtonDefaults.itemShape(index = i, count = themeOptions.size),
-                        ) { Text(label, fontSize = 11.sp) }
-                    }
-                }
-                if (state.themeMode == "catppuccin" || state.themeMode == "dracula") {
-                    val context = LocalContext.current
-                    val dynamicPrimary = androidx.compose.material3.dynamicDarkColorScheme(context).primary
-                    val accentEntries: List<Pair<String, Color>>
-                    val currentAccentKey: String
-                    val onAccentPicked: (String) -> Unit
-                    if (state.themeMode == "catppuccin") {
-                        accentEntries    = listOf("dynamic" to dynamicPrimary) + CatppuccinMocha.accents.map { (k, v) -> k to v.second }
-                        currentAccentKey = state.catppuccinAccent
-                        onAccentPicked   = { viewModel.setCatppuccinAccent(it) }
-                    } else {
-                        accentEntries    = listOf("dynamic" to dynamicPrimary) + DraculaColors.accents.map { (k, v) -> k to v.second }
-                        currentAccentKey = state.draculaAccent
-                        onAccentPicked   = { viewModel.setDraculaAccent(it) }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        accentEntries.forEach { (key, color) ->
-                            val isSelected = key == currentAccentKey
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .then(
-                                        if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                                        else Modifier
-                                    )
-                                    .clickable { onAccentPicked(key) },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (key == "dynamic") {
-                                    Icon(
-                                        Icons.Outlined.AutoAwesome,
-                                        contentDescription = "Wallpaper color",
-                                        tint = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                } else if (isSelected) {
-                                    Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = Color.Black.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                if (state.themeMode == "ptyxis") {
-                    LazyRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        items(ptyxisEntries, key = { it.key }) { entry ->
-                            val isSelected = entry.key == state.ptyxisPalette
-                            Column(
-                                modifier = Modifier
-                                    .width(56.dp)
-                                    .clickable { viewModel.setPtyxisPalette(entry.key) },
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(entry.swatch)
-                                        .then(
-                                            if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                                            else Modifier
-                                        ),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    if (isSelected) {
-                                        Icon(
-                                            Icons.Default.Check,
-                                            contentDescription = null,
-                                            tint = Color.Black.copy(alpha = 0.6f),
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                    }
-                                }
-                                Text(
-                                    entry.displayName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
-                            }
-                        }
-                    }
-                }
                 Text(
                     "Font",
                     style = MaterialTheme.typography.labelLarge,

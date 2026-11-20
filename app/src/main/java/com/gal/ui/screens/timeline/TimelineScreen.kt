@@ -3,6 +3,22 @@ package com.gal.ui.screens.timeline
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
+import com.gal.ui.components.JewelIcon
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -60,14 +76,17 @@ import com.gal.ui.screens.settings.SettingsViewModel
 fun TimelineScreen(
     onMediaClick: (Media) -> Unit,
     onSettingsClick: () -> Unit,
+    onFavouritesClick: () -> Unit,
     viewModel: TimelineViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     actions: MediaActionsViewModel = hiltViewModel(),
 ) {
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val media       by viewModel.media.collectAsStateWithLifecycle()
     val sectioned   by viewModel.sectioned.collectAsStateWithLifecycle()
     val gridColumns by viewModel.gridColumns.collectAsStateWithLifecycle()
     val sortOrder   by viewModel.sortOrder.collectAsStateWithLifecycle()
+    val orientation by viewModel.orientationFilter.collectAsStateWithLifecycle()
     val filterType  by viewModel.filterType.collectAsStateWithLifecycle()
     val settings    by settingsViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -75,6 +94,26 @@ fun TimelineScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     var showSortMenu   by remember { mutableStateOf(false) }
     var showFilterMenu by remember { mutableStateOf(false) }
+
+    if (showFilterMenu) ModalBottomSheet(onDismissRequest = { showFilterMenu = false }) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
+            Text("Filtros e ordenação", style = MaterialTheme.typography.headlineSmall)
+            Text("Tipo de mídia", style = MaterialTheme.typography.titleMedium)
+            FilterType.entries.forEach { value ->
+                TextButton(onClick = { viewModel.setFilterType(value) }) { Text((if (filterType == value) "✓ " else "") + when(value) { FilterType.ALL -> "Fotos e vídeos"; FilterType.PHOTOS -> "Fotos"; FilterType.VIDEOS -> "Vídeos" }) }
+            }
+            Text("Orientação", style = MaterialTheme.typography.titleMedium)
+            Text("Quadradas (1:1) aparecem nos dois filtros.", style = MaterialTheme.typography.bodySmall)
+            OrientationFilter.entries.forEach { value ->
+                TextButton(onClick = { viewModel.setOrientationFilter(value) }) { Text((if (orientation == value) "✓ " else "") + value.label) }
+            }
+            Text("Ordenação", style = MaterialTheme.typography.titleMedium)
+            SortOrder.entries.forEach { value ->
+                TextButton(onClick = { viewModel.setSortOrder(value) }) { Text((if (sortOrder == value) "✓ " else "") + value.label) }
+            }
+            TextButton(onClick = { showFilterMenu = false }) { Text("Concluir") }
+        }
+    }
 
     val selection = rememberSelectionState()
     val launcher = rememberLauncherForActivityResult(
@@ -90,7 +129,8 @@ fun TimelineScreen(
     var pickerMode by remember { mutableStateOf<PickerMode?>(null) }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = Color.Transparent,
+        modifier = Modifier.background(com.gal.ui.theme.galleryGradient).nestedScroll(scrollBehavior.nestedScrollConnection),
         floatingActionButton = {
             if (!selection.isActive) com.gal.ui.components.LibraryAddFab()
         },
@@ -131,44 +171,69 @@ fun TimelineScreen(
                     },
                 )
             } else {
+                Column {
                 TopAppBar(
-                    title = { Text("Poetrate") },
+                    title = { Image(painterResource(R.drawable.poetrate_wordmark), "Poetrate", Modifier.width(205.dp).height(68.dp)) },
                     actions = {
-                        SortMenu(sortOrder, viewModel::setSortOrder, showSortMenu) { showSortMenu = it }
-                        FilterMenu(filterType, viewModel::setFilterType, showFilterMenu) { showFilterMenu = it }
+                        IconButton(onClick = { showFilterMenu = true }) {
+                            Icon(Icons.AutoMirrored.Outlined.Sort, "Filtros e ordenação")
+                        }
                         TooltipBox(
                             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
                             tooltip = { PlainTooltip { Text("Settings") } },
                             state = rememberTooltipState(),
                         ) {
                             IconButton(onClick = onSettingsClick) {
-                                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                                Icon(Icons.Outlined.Settings, "Configurações")
                             }
                         }
                     },
                     scrollBehavior = scrollBehavior,
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
+                        containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent,
                     ),
                 )
+
+                }
             }
         },
     ) { padding ->
-        if (media.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.empty_timeline),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        } else {
-            Column(modifier = Modifier.padding(padding)) {
                 MediaSectionedGrid(
+                    header = {
+                        Column(Modifier.fillMaxWidth()) {
+                        if (!selection.isActive) {
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    Text("Galeria da vida", style = MaterialTheme.typography.headlineLarge, fontFamily = androidx.compose.ui.text.font.FontFamily.Serif, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                    Text("Sua história merece ser preservada.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterType.entries.forEach { type ->
+                            FilterChip(selected = filterType == type, onClick = { viewModel.setFilterType(type) },
+                                shape = androidx.compose.foundation.shape.CircleShape,
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primary, selectedLabelColor = MaterialTheme.colorScheme.onPrimary),
+                                label = { Text(when(type) { FilterType.ALL -> "Todas"; FilterType.PHOTOS -> "Fotos"; FilterType.VIDEOS -> "Vídeos" }) })
+                        }
+                        AssistChip(onClick = onFavouritesClick, label = { Text("Favoritos") }, shape = androidx.compose.foundation.shape.CircleShape)
+                    }
+                        IconButton(onClick = { settingsViewModel.setGridColumns(com.gal.ui.screens.settings.GRID_COLUMN_OPTIONS.let { it[(it.indexOf(gridColumns) + 1) % it.size] }) }) {
+                            Icon(androidx.compose.material.icons.Icons.Outlined.GridView, "Alterar colunas")
+                        }
+                    }
+                }
+                        }
+                        if (isLoading) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth().padding(24.dp))
+                        } else if (media.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.empty_timeline),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        }
+                    },
                     sections = sectioned,
                     columns = gridColumns,
                     selectedIds = selection.selected,
@@ -181,10 +246,8 @@ fun TimelineScreen(
                     onMediaLongClick = { item ->
                         selection.toggle(item.id)
                     },
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().padding(padding),
                 )
-            }
-        }
 
         repositionTarget?.let { target ->
             com.gal.ui.components.RepositionDialog(
